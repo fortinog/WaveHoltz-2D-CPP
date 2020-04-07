@@ -1,5 +1,5 @@
 # Set direction of source and header files, and build direction
-SRC_DIR    = .
+SRC_DIR    = src
 INC_DIR    = include
 BUILD_DIR  = .build
 LDFLAGS    = ""
