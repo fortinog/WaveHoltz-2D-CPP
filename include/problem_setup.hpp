@@ -20,15 +20,19 @@ struct ProblemSetup {
 	double hx;
 	double hy;
 
+	// Time stepping info
+	double CFL;
+	double dt;
+	double dt2;
+	double idt2;
+	double final_time;
+	int    nsteps;
+
 	// Left/Right boundary points
 	double x_L;
 	double x_R;
 	double y_L;
 	double y_R;
-
-	// // Value of solution at boundaries
-	// double ua;
-	// double ub;
 
 	// Specify a type for MMS (if used)
 	int twilightType;

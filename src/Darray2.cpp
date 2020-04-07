@@ -125,8 +125,8 @@ void Darray2::define_offsets()
 //-----------------------------------------------------------------------
 void Darray2::copy( const Darray2& u )
 {
-    if( m_data != NULL )
-        delete[] m_data;
+    // if( m_data != NULL )
+    //     delete[] m_data;
     
     m_nc = u.m_nc;
     m_s = u.m_s;
@@ -139,7 +139,7 @@ void Darray2::copy( const Darray2& u )
 
     if( m_nc*M*N > 0 )
     {
-        m_data = new double[m_nc*M*N];
+        // m_data = new double[m_nc*M*N];
         for( int i = 0 ; i < m_nc*M*N ; i++ )
             m_data[i] = u.m_data[i];
     }
