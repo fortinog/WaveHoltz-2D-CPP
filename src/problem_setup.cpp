@@ -4,8 +4,8 @@
 /*	    HERE IS WHERE WE EDIT THE PROBLEM PARAMETERS	    */
 /************************************************************/
 
-static const int	defaultN = 30;
-static const int	defaultM = 30;
+static const int	defaultN = 20;
+static const int	defaultM = 20;
 
 static const double	defaultXl					= 0.0;
 static const double	defaultXr					= 1.0;
@@ -15,11 +15,10 @@ static const double	defaultYr					= 1.0;
 static const double	defaultCFL					= 0.5;
 static const double	defaultFinalTime			= 1.0;
 
-
 static const int	defaultTwilightType			= 1;
-static const double	defaultKx					= M_PI;
-static const double	defaultKy					= M_PI;
-static const double	defaultKt					= sqrt(2)*M_PI;
+static const double	defaultKx					= 2*M_PI;
+static const double	defaultKy					= 2*M_PI;
+static const double	defaultKt					= 2*sqrt(2)*M_PI;
 
 static const double	defaultX0					= 0.0;
 static const double	defaultY0					= 0.0;
@@ -59,15 +58,17 @@ ProblemSetup::ProblemSetup():
 		}
 
 		// Include the physical boundary for now
-		hx = (x_R-x_L)/double(N+1);
-		hy = (y_R-y_L)/double(M+1);
+		// hx = (x_R-x_L)/double(N+1);
+		// hy = (y_R-y_L)/double(M+1);
+		hx = (x_R-x_L)/double(N-1);
+		hy = (y_R-y_L)/double(M-1);
 
 		// Calculate time step size
-		dt = CFL*std::min(hx,hy);
+		dt     = CFL*std::min(hx,hy);
 		nsteps = (int) ceil(final_time/dt);
-		dt = final_time/((double) nsteps);
-		dt2 = pow(dt,2.0);
-		idt2 = 1.0/dt2;
+		dt     = final_time/((double) nsteps);
+		dt2    = pow(dt,2.0);
+		idt2   = 1.0/dt2;
 	}
 
 // The level set function defining the computational boundary of the domain

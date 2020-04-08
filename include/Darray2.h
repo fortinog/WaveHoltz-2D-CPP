@@ -11,6 +11,7 @@ class Darray2
     ~Darray2() {if( m_data != 0 ) delete[] m_data;}
     void define( int nc, int x_s, int x_e, int y_s, int y_e);
     void define( int x_s, int x_e, int y_s, int y_e);
+    inline double* c_ptr() {return m_data;}
     inline bool in_range( int c, int i, int j)
     {return 1 <= c && c <= m_nc && m_s <= i && i <= m_e && n_s <= j && j <= n_e;}
 
@@ -60,6 +61,7 @@ class Darray2
     void define_offsets();
     void set_value( double scalar );
     void copy( const Darray2& u );
+    void writeToFile(char* fileName, int is, int ie, int js, int je);
     int m_nc, M, N;
   private:
    double* m_data;

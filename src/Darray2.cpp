@@ -147,3 +147,15 @@ void Darray2::copy( const Darray2& u )
         m_data = NULL;
     define_offsets();
 }
+
+void Darray2::writeToFile(char* fileName, int is, int ie, int js, int je)
+{
+    FILE *extFile = fopen(fileName, "w");
+    for (int i=is; i<=ie; i++) 
+    {
+        for (int j=js; j<=je; j++)
+            fprintf(extFile, " %18.10e", m_data[m_base+off_i*i+off_c+off_j*j]);
+        fprintf(extFile,"\n");
+    }
+    fclose(extFile);
+}

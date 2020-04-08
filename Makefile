@@ -11,12 +11,13 @@ SRC_FILES += $(wildcard $(SRC_DIR)/*/*.cpp)
 OBJ_FILES  = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRC_FILES))
 INC        = -I$(INC_DIR)
 
-CXX        = g++
+# CXX        = g++
+CXX        = mpicxx
 CXXFLAGS   = -O3
 
 # Rule for linking main
 main: $(OBJ_FILES)
-# 	$(CXX) -o $@ $(OBJ_FILES) $(LDFLAGS) -L$(LDPATH)
+#  	$(CXX) -o $@ $(OBJ_FILES) $(LDFLAGS) -L$(LDPATH)
 	$(CXX) -o $@ $(OBJ_FILES)
 
 # Rule for building all src files
@@ -25,7 +26,7 @@ $(BUILD_DIR)/%.o : $(SRC_DIR)/%.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@ $(INC) 
 	@$(CXX) -MM $< -MP -MT $@ -MF $(@:.o=.d) $(INC) 
 
-.PHONY: all clean sandwich
+.PHONY: all clean sandwich para
 
 # use 'make clean' to remove object files and executable
 clean:
@@ -40,6 +41,10 @@ sandwich:
 	make clean
 	make
 	./main
+para:
+	make clean
+	make
+	mpirun --oversubscribe -n 2 ./main
 
 # include the dependency files
 -include $(OBJ_FILES:.o=.d)

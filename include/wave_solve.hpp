@@ -9,37 +9,61 @@
 #include <string>   
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <math.h>
+#include <memory>
 #include "problem_setup.hpp"
 #include "Darray1.h"
 #include "Darray2.h"
 #include "Iarray2.h"
 #include "twilight_2d.h"
-#include <iomanip>
+#include "domain_decomposition.h"
 using namespace std;
+
 
 class Wave_Solve {
 public:
 	ProblemSetup setup;
-	Darray2 w, lap, wm, wp;
+	// Darray2 w, lap, wm, wp;
+    MPI_Datatype sub_send_left;
+    MPI_Datatype sub_recv_left;
+    MPI_Datatype sub_send_right;
+    MPI_Datatype sub_recv_right;
+    MPI_Datatype sub_send_up;
+    MPI_Datatype sub_recv_up;
+    MPI_Datatype sub_send_down;
+    MPI_Datatype sub_recv_down;
+
+
 	Iarray2 mask;
 	Darray1 x, y;
 	double t;
+	// double* w_ptr;
 
-	Wave_Solve();
+	int istart, iend, jstart, jend, N, M;
+	int j_left_start, j_left_end, i_down_start, i_down_end;
+	int j_right_start, j_right_end, i_up_start, i_up_end;
+
+	int up_neigh, down_neigh, left_neigh, right_neigh;
+	int size_lr, size_ud;
+
+	Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM);
 	virtual ~Wave_Solve() {};
 	void Compute_Mask();
 	void Enforce_BC(Darray2 &v);
-	void Compute_Laplacian();
-	void Set_Initial_Data();
-	double Compute_Laplacian_Error(const int flag);
-	double Compute_Solution_Error(const int flag);
-	void Refine_Grid();
-	void Time_Step();
-	void Taylor_Expand();
-	void Clear_Data();
-	double Compute_Energy();
+	void Compute_Laplacian(Darray2& w, Darray2& lap);
+	void Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap);
+	double Compute_Laplacian_Error(const int flag, Darray2& lap, MPI_Comm CART_COMM);
+	double Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm CART_COMM);
+	// void Refine_Grid();
+	void Time_Step(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap);
+	void Taylor_Expand(Darray2& wm, Darray2& w, Darray2& lap);
+	// void Clear_Data();
+	double Compute_Energy(Darray2& wm, Darray2& w, Darray2& lap, MPI_Comm CART_COMM);
 	double forcing(const double x, const double y, const double t);
-	void Solve_PDE();
+	void Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, double* w_ptr, MPI_Comm CART_COMM);
+	void Communicate_Solution(MPI_Comm CART_COMM, double* w_ptr);
+	void Setup_Subarrays(const int nolp);
+	void Finalize();
 };
 #endif
