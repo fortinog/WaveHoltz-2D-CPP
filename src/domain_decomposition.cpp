@@ -40,25 +40,6 @@ MPI_Comm mpi_decompose_domain(int num_proc, int NX, int NY, int rerank, int* ran
     // Get my local coordinates
     orig_grid->px = coords[0];
     orig_grid->py = coords[1];
-
-    // Adjust domain parameters to account for inter-domain halo
-    // boundary data.  If we have a neighbor in a given direction
-    // (rank of neighbor is non-negative) then we need to adjust the
-    // starting or ending index.
-
-    // ghost_grid->left_neigh  = orig_grid->left_neigh;
-    // ghost_grid->right_neigh = orig_grid->right_neigh;
-    // ghost_grid->up_neigh = orig_grid->up_neigh;
-    // ghost_grid->down_neigh = orig_grid->down_neigh;
-
-    // ghost_grid->x_s = orig_grid->x_s - (ghost_grid->left_neigh  >= 0 ? 1 : 0 );
-    // ghost_grid->x_e = orig_grid->x_e + (ghost_grid->right_neigh >= 0 ? 1 : 0 );
-    // ghost_grid->y_s = orig_grid->y_s - (ghost_grid->down_neigh >= 0 ? 1 : 0 );
-    // ghost_grid->y_e = orig_grid->y_e + (ghost_grid->up_neigh >= 0 ? 1 : 0 );
-    // ghost_grid->nx_loc = ghost_grid->x_e - ghost_grid->x_s + 1;
-    // ghost_grid->ny_loc = ghost_grid->y_e - ghost_grid->y_s + 1;
-
-    // ghost_grid->nolp = 1;
     orig_grid->nolp = 1;
 
 	return cart_comm;

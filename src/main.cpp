@@ -3,7 +3,6 @@
 #include <cmath>
 #include <chrono> 
 #include <vector>
-#include "Darray.h"
 #include "Darray2.h"
 #include "problem_setup.hpp"
 #include "wave_solve.hpp"

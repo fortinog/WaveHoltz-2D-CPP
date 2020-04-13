@@ -18,6 +18,7 @@
 #include "Iarray2.h"
 #include "twilight_2d.h"
 #include "domain_decomposition.h"
+#include "H5Cpp.h"
 using namespace std;
 
 
@@ -49,21 +50,22 @@ public:
 
 	Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM);
 	virtual ~Wave_Solve() {};
-	void Compute_Mask();
-	void Enforce_BC(Darray2 &v);
-	void Compute_Laplacian(Darray2& w, Darray2& lap);
-	void Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap);
-	double Compute_Laplacian_Error(const int flag, Darray2& lap, MPI_Comm CART_COMM);
-	double Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm CART_COMM);
-	// void Refine_Grid();
-	void Time_Step(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap);
-	void Taylor_Expand(Darray2& wm, Darray2& w, Darray2& lap);
-	// void Clear_Data();
-	double Compute_Energy(Darray2& wm, Darray2& w, Darray2& lap, MPI_Comm CART_COMM);
-	double forcing(const double x, const double y, const double t);
-	void Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, double* w_ptr, MPI_Comm CART_COMM);
-	void Communicate_Solution(MPI_Comm CART_COMM, double* w_ptr);
-	void Setup_Subarrays(const int nolp);
-	void Finalize();
+	void    Compute_Mask();
+	void    Find_Ghost_Points();
+	void    Fill_In_Ghost_Values();
+	void    Enforce_BC(Darray2 &v);
+	void    Compute_Laplacian(Darray2& w, Darray2& lap);
+	void    Compute_Laplacian_NB(Darray2& w, Darray2& lap, MPI_Request* recv_req);
+	void    Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap);
+	double  Compute_Laplacian_Error(const int flag, Darray2& lap, MPI_Comm CART_COMM);
+	double  Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm CART_COMM);
+	void    Time_Step(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap);
+	void    Taylor_Expand(Darray2& wm, Darray2& w, Darray2& lap);
+	double  Compute_Energy(Darray2& wm, Darray2& w, Darray2& lap, MPI_Comm CART_COMM);
+	double  forcing(const double x, const double y, const double t);
+	void    Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, double* w_ptr, MPI_Comm CART_COMM);
+	void    Communicate_Solution(MPI_Comm CART_COMM, double* w_ptr, MPI_Request* send_req, MPI_Request* recv_req);
+	void    Setup_Subarrays(const int nolp);
+	void    Finalize();
 };
 #endif

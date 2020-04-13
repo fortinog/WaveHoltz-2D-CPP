@@ -2,7 +2,7 @@
 SRC_DIR    = src
 INC_DIR    = include
 BUILD_DIR  = .build
-LDFLAGS    = ""
+LDFLAGS    = 
 LDPATH     = SRC_DIR
 
 # list all source and object files
@@ -17,8 +17,7 @@ CXXFLAGS   = -O3
 
 # Rule for linking main
 main: $(OBJ_FILES)
-#  	$(CXX) -o $@ $(OBJ_FILES) $(LDFLAGS) -L$(LDPATH)
-	$(CXX) -o $@ $(OBJ_FILES)
+	$(CXX) -o $@ $(OBJ_FILES) $(LDFLAGS) -L$(LDPATH)
 
 # Rule for building all src files
 $(BUILD_DIR)/%.o : $(SRC_DIR)/%.cpp

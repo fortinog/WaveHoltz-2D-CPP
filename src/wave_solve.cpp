@@ -16,22 +16,16 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM){
 	N 	   = Local_Grid.nx_loc;
 	M 	   = Local_Grid.ny_loc;
 	nolp   = Local_Grid.nolp;
-	// istart = 1-nolp;
-	// iend   = N+nolp;
-	// jstart = 1-nolp;
-	// jend   = M+nolp;
 
+	// MPI rank of neighbor in each direction
 	up_neigh    = Local_Grid.up_neigh;
 	down_neigh  = Local_Grid.down_neigh;
 	left_neigh  = Local_Grid.left_neigh;
 	right_neigh = Local_Grid.right_neigh;
 
-
-	// istart = (left_neigh == MPI_PROC_NULL) ? istart+1 : istart;
-	// iend   = (right_neigh == MPI_PROC_NULL) ? iend-1 : iend;
-	// istart = (left_neigh == MPI_PROC_NULL) ? istart+1 : istart;
-	// istart = (left_neigh == MPI_PROC_NULL) ? istart+1 : istart;
-
+	/* Remove a point from a process if it is has part of a physical boundary. This is 
+	   to avoid assigning a ghost point when a process already has a boundary point and 
+	   save on storage. */
 	N = (left_neigh  == MPI_PROC_NULL) ? N-1 : N;
 	N = (right_neigh == MPI_PROC_NULL) ? N-1 : N;
 	M = (down_neigh  == MPI_PROC_NULL) ? M-1 : M;
@@ -42,7 +36,10 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM){
 	jstart = 1-nolp;
 	jend   = M+nolp;
 
-	// boundary loop indices
+	/* Start and stop indices along a boundary in each direction for a process. 
+	   Set up so that we avoid doing logical checks each time 
+	   we enforce boundary conditions and loops are empty if no physical boundary
+	   present */
 	j_left_start  = 0;
 	j_left_end    = -1;
 	j_right_start = 0;
@@ -55,6 +52,7 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM){
 	x_off = nolp;
 	y_off = nolp;
 
+	// Only assign sensible boundary loop indices if next to a boundary.
 	if(left_neigh  == MPI_PROC_NULL){
 		j_left_start = jstart+1;
 		j_left_end   = jend-1;
@@ -74,6 +72,7 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM){
 		i_down_end   = iend-1;
 	}
 
+	// Time stepping info
 	nsteps = setup.nsteps;
 	dt     = setup.dt;
 	dt2    = pow(setup.dt,2);
@@ -83,25 +82,15 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM){
 	y.define(1,jstart,jend);
 
 
-	// cout << "istart " << istart << " iend : " << iend << "\n";
-	// cout << "jstart " << jstart << " jend : " << jend << "\n";
-
 	// Setup local grid: Note i=0,N+1, j=0,M+1 correspond to either the boundary
 	// or a ghost region for the given subdomain.
-
-	// FMG: if I have a ghost, adjust either end
 	for(int i=istart;i<=iend;i++) x(i) = setup.x_L + (i + Local_Grid.x_s - x_off)*setup.hx;
 	for(int i=jstart;i<=jend;i++) y(i) = setup.y_L + (i + Local_Grid.y_s - y_off)*setup.hy;
 
-	// for(int i =istart;i<=iend; i++) cout << x(i) << " ";
-	// cout << "\n";
-	// for(int i=jstart;i<=jend;i++) cout << y(i) << " ";
-	// cout << "\n";
 
 	// Initialize working arrays
 	w.define(1,istart,iend,jstart,jend);
 	w.set_value(0.0);
-
 	wp.define(1,istart,iend,jstart,jend);
 	wp.set_value(0.0);
 	wm.define(1,istart,iend,jstart,jend);
@@ -111,13 +100,14 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM){
 	mask.define(1,istart,iend,jstart,jend);
 	mask.set_value(0);
 
+	// Bring out data pointer for message passing
     double* w_ptr = w.c_ptr();
 
+    // Length of data to be sent/received left/right or up/down
     size_lr = iend-istart+1;
     size_ud = jend-jstart+1;
 
     // Set up all communication subarrays.
-    // Setup_Subarrays(nolp, M, N);
     Setup_Subarrays(nolp);
 
 	// Fill in w, wm, lap so that we can start time stepping immediately
@@ -215,7 +205,7 @@ void Wave_Solve::Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap){
 	Enforce_BC(w);
 	Compute_Laplacian(w, lap);
 	Taylor_Expand(wm,w,lap);
-	Enforce_BC(wm);
+	// Enforce_BC(wm);
 }
 
 // Forcing (method of manufactured solutions)
@@ -230,45 +220,16 @@ double Wave_Solve::forcing(const double x0, const double y0, const double t0){
 
 
 // Enforce the boundary conditions. In this simple case, fill in
-// the boundary data. FMG:: Update to only update if I have a physical
-// boundary
+// the boundary data.
 void Wave_Solve::Enforce_BC(Darray2 &v){
 	Twilight mms(setup);
 	int i,j;
 	double x0, y0;
 	double t = (*this).t;
 
-	// // Left boundary
-	// i = istart;
-	// x0 = x(i);
-	// for(j=jstart+1;j<=jend-1;j++){
-	// 	v(i,j) = mms.trigTwilight(0,x0,0,y(j),0,t);
-	// }
-
-	// // Right boundary
-	// i = iend;
-	// x0 = x(i);
-	// for(j=jstart+1;j<=jend-1;j++){
-	// 	v(i,j) = mms.trigTwilight(0,x0,0,y(j),0,t);
-	// }
-
-	// // Bottom boundary
-	// j = jstart;
-	// y0 = y(j);
-	// for(i=istart+1;i<=iend-1;i++){
-	// 	v(i,j) = mms.trigTwilight(0,x(i),0,y0,0,t);
-	// }
-
-	// // Right boundary
-	// j = jend;
-	// y0 = y(j);
-	// for(i=istart+1;i<=iend-1;i++){
-	// 	v(i,j) = mms.trigTwilight(0,x(i),0,y0,0,t);
-	// }
 	// Left boundary
 	i = istart;
 	x0 = x(i);
-	// cout << "x0 :" << x0 << "\n";
 	for(j=j_left_start;j<=j_left_end;j++){
 		v(i,j) = mms.trigTwilight(0,x0,0,y(j),0,t);
 	}
@@ -276,7 +237,6 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 	// Right boundary
 	i = iend;
 	x0 = x(i);
-	// cout << "x0 :" << x0 << "\n";
 	for(j=j_right_start;j<=j_right_end;j++){
 		v(i,j) = mms.trigTwilight(0,x0,0,y(j),0,t);
 	}
@@ -284,7 +244,6 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 	// Bottom boundary
 	j = jstart;
 	y0 = y(j);
-	// cout << "y0 :" << y0 << "\n";
 	for(i=i_down_start;i<=i_down_end;i++){
 		v(i,j) = mms.trigTwilight(0,x(i),0,y0,0,t);
 	}
@@ -292,11 +251,11 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 	// Top boundary
 	j = jend;
 	y0 = y(j);
-	// cout << "y0 :" << y0 << "\n";
 	for(i=i_up_start;i<=i_up_end;i++){
 		v(i,j) = mms.trigTwilight(0,x(i),0,y0,0,t);
 	}
 }
+
 
 void Wave_Solve::Compute_Laplacian(Darray2& w, Darray2& lap){
 	double ihx2 = 1.0/pow(setup.hx,2);
@@ -305,7 +264,7 @@ void Wave_Solve::Compute_Laplacian(Darray2& w, Darray2& lap){
 	double x0,xp,xm;
 	double y0,yp,ym;
 
-	// Compute the usual Laplacian (interior only)
+	// Compute the usual Laplacian (FULL)
 	for(int i=istart+1;i<=iend-1;i++){
 		xm = x(i-1);
 		x0 = x(i);
@@ -329,6 +288,156 @@ void Wave_Solve::Compute_Laplacian(Darray2& w, Darray2& lap){
 			// Add all together
 			lap(i,j) += 0.5*ihx2*((c2+c3)*w(i+1,j) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i-1,j));
 		}
+	}
+   
+
+}
+// This version of the routine computes the Laplacian on the innermost grid points first 
+// while communication is happening. Once all data has been communicated, compute the Laplacian
+// on the edges of current computational subdomain.
+void Wave_Solve::Compute_Laplacian_NB(Darray2& w, Darray2& lap, MPI_Request* recv_req){
+	double ihx2 = 1.0/pow(setup.hx,2);
+	double ihy2 = 1.0/pow(setup.hy,2);
+	double c1,c2,c3;
+	double x0,xp,xm;
+	double y0,yp,ym;
+	int i,j;
+
+	// Compute the usual Laplacian (inner only)
+	for(i=istart+2;i<=iend-2;i++){
+		xm = x(i-1);
+		x0 = x(i);
+		xp = x(i+1);
+		for(j=jstart+2;j<=jend-2;j++){
+			ym = y(j-1);
+			y0 = y(j);
+			yp = y(j+1);
+
+			// Compute d_{yy}
+			c1 = setup.c2(x0,ym);
+			c2 = setup.c2(x0,y0);
+			c3 = setup.c2(x0,yp);
+			lap(i,j) = 0.5*ihy2*((c2+c3)*w(i,j+1) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i,j-1));
+
+			// Compute d_{xx}
+			c1 = setup.c2(xm,y0);
+			c2 = setup.c2(x0,y0);
+			c3 = setup.c2(xp,y0);
+
+			// Add all together
+			lap(i,j) += 0.5*ihx2*((c2+c3)*w(i+1,j) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i-1,j));
+		}
+	}
+    
+    // Once all receives are processed, compute Laplacian on the 
+    // edges of the current process subdomain
+    MPI_Waitall( 4, recv_req, MPI_STATUSES_IGNORE );
+
+    // bottom
+	j = jstart+1;
+	ym = y(j-1);
+	y0 = y(j);
+	yp = y(j+1);
+	for(i=istart+1;i<=iend-1;i++){
+		xm = x(i-1);
+		x0 = x(i);
+		xp = x(i+1);
+
+		// Compute d_{yy}
+		c1 = setup.c2(x0,ym);
+		c2 = setup.c2(x0,y0);
+		c3 = setup.c2(x0,yp);
+		lap(i,j) = 0.5*ihy2*((c2+c3)*w(i,j+1) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i,j-1));
+
+		// Compute d_{xx}
+		c1 = setup.c2(xm,y0);
+		c2 = setup.c2(x0,y0);
+		c3 = setup.c2(xp,y0);
+
+		// Add all together
+		lap(i,j) += 0.5*ihx2*((c2+c3)*w(i+1,j) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i-1,j));
+	}
+
+	// top
+	j = jend-1;
+	ym = y(j-1);
+	y0 = y(j);
+	yp = y(j+1);
+	for(i=istart+1;i<=iend-1;i++){
+		xm = x(i-1);
+		x0 = x(i);
+		xp = x(i+1);
+
+		// Compute d_{yy}
+		c1 = setup.c2(x0,ym);
+		c2 = setup.c2(x0,y0);
+		c3 = setup.c2(x0,yp);
+		lap(i,j) = 0.5*ihy2*((c2+c3)*w(i,j+1) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i,j-1));
+
+		// Compute d_{xx}
+		c1 = setup.c2(xm,y0);
+		c2 = setup.c2(x0,y0);
+		c3 = setup.c2(xp,y0);
+
+		// Add all together
+		lap(i,j) += 0.5*ihx2*((c2+c3)*w(i+1,j) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i-1,j));
+	}
+
+
+	// left
+	i = istart + 1;
+	xm = x(i-1);
+	x0 = x(i);
+	xp = x(i+1);
+
+	// Compute the usual Laplacian (inner only)
+	for(j=jstart+1;j<=jend-1;j++){
+
+		ym = y(j-1);
+		y0 = y(j);
+		yp = y(j+1);
+
+		// Compute d_{yy}
+		c1 = setup.c2(x0,ym);
+		c2 = setup.c2(x0,y0);
+		c3 = setup.c2(x0,yp);
+		lap(i,j) = 0.5*ihy2*((c2+c3)*w(i,j+1) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i,j-1));
+
+		// Compute d_{xx}
+		c1 = setup.c2(xm,y0);
+		c2 = setup.c2(x0,y0);
+		c3 = setup.c2(xp,y0);
+
+		// Add all together
+		lap(i,j) += 0.5*ihx2*((c2+c3)*w(i+1,j) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i-1,j));
+	}
+
+	// right
+	i = iend - 1;
+	xm = x(i-1);
+	x0 = x(i);
+	xp = x(i+1);
+
+	// Compute the usual Laplacian (inner only)
+	for(j=jstart+1;j<=jend-1;j++){
+
+		ym = y(j-1);
+		y0 = y(j);
+		yp = y(j+1);
+
+		// Compute d_{yy}
+		c1 = setup.c2(x0,ym);
+		c2 = setup.c2(x0,y0);
+		c3 = setup.c2(x0,yp);
+		lap(i,j) = 0.5*ihy2*((c2+c3)*w(i,j+1) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i,j-1));
+
+		// Compute d_{xx}
+		c1 = setup.c2(xm,y0);
+		c2 = setup.c2(x0,y0);
+		c3 = setup.c2(xp,y0);
+
+		// Add all together
+		lap(i,j) += 0.5*ihx2*((c2+c3)*w(i+1,j) - (c1+2.0*c2+c3)*w(i,j) + (c1+c2)*w(i-1,j));
 	}
 
 }
@@ -546,19 +655,22 @@ double Wave_Solve::Compute_Energy(Darray2& wm, Darray2& w, Darray2& lap, MPI_Com
 void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, double* w_ptr, MPI_Comm CART_COMM){
 	double energy_old = 1e10;
 	double energy;
+    MPI_Request send_req[4];
+    MPI_Request recv_req[4];
 
 	for(int i =0;i<setup.nsteps;i++){
 	    Time_Step(wm,w,wp,lap);
 	    energy = Compute_Energy(wm, w, lap,CART_COMM);
         cout << scientific << right << setw(14)<< abs(energy-energy_old)/abs(energy_old) << "\n";
 	    energy_old = energy;
-	    Communicate_Solution(CART_COMM,w_ptr);
-	    Compute_Laplacian(w, lap);
+	    Communicate_Solution(CART_COMM,w_ptr,send_req,recv_req);
+        MPI_Waitall( 4, send_req, MPI_STATUSES_IGNORE );
+	    Compute_Laplacian_NB(w, lap, recv_req);
 	}
 
 }
 
-// This routine sets up the communication subarrays.
+// This routine sets up the communication subarrays to simplify MPI calls.
 void Wave_Solve::Setup_Subarrays(const int nolp){
 	int ndims = 2;
 	int M = size_ud - 2*nolp;
@@ -570,7 +682,6 @@ void Wave_Solve::Setup_Subarrays(const int nolp){
 
 	// Left send
     int array_of_subsizes[2] = {nolp,M};
-    // int array_of_sizes[2] = {N+2*nolp,M+2*nolp};
     int array_of_sizes[2] = {size_lr,size_ud};
 
     int array_of_starts[2] = {nolp,nolp};
@@ -584,8 +695,6 @@ void Wave_Solve::Setup_Subarrays(const int nolp){
     MPI_Type_commit(&sub_send_left);
     
     // Right receive
-    // array_of_starts[0] = N+nolp;
-    // array_of_starts[1] = nolp;
     array_of_starts[0] = size_lr-1;
     array_of_starts[1] = nolp;
     MPI_Type_create_subarray(ndims,
@@ -596,8 +705,6 @@ void Wave_Solve::Setup_Subarrays(const int nolp){
     MPI_Type_commit(&sub_recv_right);
 
     // Right send
-    // array_of_starts[0] = N;
-    // array_of_starts[1] = nolp;
     array_of_starts[0] = size_lr - nolp - 1;
     array_of_starts[1] = nolp;    
     MPI_Type_create_subarray(ndims,
@@ -626,8 +733,6 @@ void Wave_Solve::Setup_Subarrays(const int nolp){
 	array_of_subsizes[1] = nolp;
 
 	// Up send
-	// array_of_starts[0] = nolp;
-	// array_of_starts[1] = M;
 	array_of_starts[0] = nolp;
 	array_of_starts[1] = size_ud-1-nolp;
     MPI_Type_create_subarray(ndims,
@@ -648,8 +753,6 @@ void Wave_Solve::Setup_Subarrays(const int nolp){
     MPI_Type_commit(&sub_recv_down);
 
 	// Down send
-	// array_of_starts[0] = nolp;
-	// array_of_starts[1] = nolp;
 	array_of_starts[0] = nolp;
 	array_of_starts[1] = nolp;
     MPI_Type_create_subarray(ndims,
@@ -660,8 +763,6 @@ void Wave_Solve::Setup_Subarrays(const int nolp){
     MPI_Type_commit(&sub_send_down);
 
     // Up receive
-    // array_of_starts[0] = nolp;
-    // array_of_starts[1] = M+nolp;
     array_of_starts[0] = nolp;
     array_of_starts[1] = size_ud - 1;
     MPI_Type_create_subarray(ndims,
@@ -673,33 +774,32 @@ void Wave_Solve::Setup_Subarrays(const int nolp){
 
 }
 
-// Communicate all ghost points. TODO: Non-blocking communication
-// to hide latency.
-void Wave_Solve::Communicate_Solution(MPI_Comm CART_COMM, double* w_ptr){
+// Communicate all ghost points. Non-Blocking communication used.
+void Wave_Solve::Communicate_Solution(MPI_Comm CART_COMM, double* w_ptr, MPI_Request* send_req, MPI_Request* recv_req){
 	int tag = 22;
 	MPI_Status status;
 
 	// Send left, Receive right    
-    MPI_Send(w_ptr, 1, sub_send_left, left_neigh, tag, CART_COMM);
-    MPI_Recv(w_ptr, 1, sub_recv_right, right_neigh, tag, CART_COMM, &status);
+    MPI_Isend(w_ptr, 1, sub_send_left, left_neigh, tag, CART_COMM, &send_req[0]);
+    MPI_Irecv(w_ptr, 1, sub_recv_right, right_neigh, tag, CART_COMM, &recv_req[0]);
 
 	// Send right, Receive left    
     tag = 23;
-    MPI_Send(w_ptr, 1, sub_send_right, right_neigh, tag, CART_COMM);
-    MPI_Recv(w_ptr, 1, sub_recv_left, left_neigh, tag, CART_COMM, &status);
+    MPI_Isend(w_ptr, 1, sub_send_right, right_neigh, tag, CART_COMM, &send_req[1]);
+    MPI_Irecv(w_ptr, 1, sub_recv_left, left_neigh, tag, CART_COMM, &recv_req[1]);
 
 	// Send up, Receive down 
 	tag = 24;   
-    MPI_Send(w_ptr, 1, sub_send_up, up_neigh, tag, CART_COMM);
-    MPI_Recv(w_ptr, 1, sub_recv_down, down_neigh, tag, CART_COMM, &status);
+    MPI_Isend(w_ptr, 1, sub_send_up, up_neigh, tag, CART_COMM, &send_req[2]);
+    MPI_Irecv(w_ptr, 1, sub_recv_down, down_neigh, tag, CART_COMM, &recv_req[2]);
 
 	// Send down, Receive up    
     tag = 25;
-    MPI_Send(w_ptr, 1, sub_send_down, down_neigh, tag, CART_COMM);
-    MPI_Recv(w_ptr, 1, sub_recv_up, up_neigh, tag, CART_COMM, &status);
-    MPI_Barrier(CART_COMM);
+    MPI_Isend(w_ptr, 1, sub_send_down, down_neigh, tag, CART_COMM, &send_req[3]);
+    MPI_Irecv(w_ptr, 1, sub_recv_up, up_neigh, tag, CART_COMM, &recv_req[3]);
 }
 
+// Free MPI communication types
 void Wave_Solve::Finalize(){
 	MPI_Type_free( &sub_send_left ); 
 	MPI_Type_free( &sub_recv_left);

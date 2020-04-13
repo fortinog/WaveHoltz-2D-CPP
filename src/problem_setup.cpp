@@ -86,3 +86,5 @@ double ProblemSetup::c2(const double x, const double y){
 	// Normalized constant coefficient
 	return 1.0;
 }
+
+// Routines for root finding
