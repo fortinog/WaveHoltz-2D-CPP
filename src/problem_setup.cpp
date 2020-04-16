@@ -4,12 +4,12 @@
 /*	    HERE IS WHERE WE EDIT THE PROBLEM PARAMETERS	    */
 /************************************************************/
 
-static const int	defaultN = 20;
-static const int	defaultM = 20;
+static const int	defaultN = 11;
+static const int	defaultM = 11;
 
-static const double	defaultXl					= 0.0;
+static const double	defaultXl					= -1.0;
 static const double	defaultXr					= 1.0;
-static const double	defaultYl					= 0.0;
+static const double	defaultYl					= -1.0;
 static const double	defaultYr					= 1.0;
 
 static const double	defaultCFL					= 0.5;
@@ -73,12 +73,18 @@ ProblemSetup::ProblemSetup():
 
 // The level set function defining the computational boundary of the domain
 double ProblemSetup::Level_Set(const double x, const double y){
-	// [x_L,x_R]x[y_L,y_R]
+	/*
+    // [x_L,x_R]x[y_L,y_R]
 	double xval, yval, l_val;
 	xval = std::min(x-(*this).x_L,(*this).x_R-x);
 	yval = std::min(y-(*this).y_L,(*this).y_R-y);
 	l_val = -std::min(xval,yval);
 	return l_val;
+    */
+    // Circle of radius 1
+    double l_val;
+    l_val = x*x+y*y-1;
+    return l_val;
 }
 
 // Speed of sound in the medium
@@ -88,3 +94,40 @@ double ProblemSetup::c2(const double x, const double y){
 }
 
 // Routines for root finding
+// AAL Start
+// Use secant method to find the distance to the boundary
+// xn+1 = xn - f(xn-1)(xn-1 - xn-2)/(f(xn-1) - f(xn-2))
+double ProblemSetup::Dist_to_bdry(const double x, const double y,int dir){
+    double d, tol,xold,xn,xnew,yold,yn,ynew;
+    double num, denom, alpha;
+    int k;
+    tol = 10e-10; // Tolerance
+    // Inital Guesses are midpoint of domain and Ghost pt
+    if (dir == 1){
+    xold = 0.5;  // Midpoint of x interval
+    yold = y;  // y val
+    }
+    else if (dir == 2){
+    xold = x;  // x val
+    yold = 0.5;  // Midpoint of y interval
+    }
+    xn = x;
+    yn = y;
+    int Count = 0;
+    while (abs(Level_Set(xn,yn)) > tol){
+        num = Level_Set(xn,yn);
+        denom = Level_Set(xn,yn) - Level_Set(xold,yold);
+        alpha = num/denom;
+        xnew = xn - alpha*(xn-xold);
+        ynew = yn - alpha*(yn-yold);
+        // Update everything
+        xold = xn;
+        yold = yn;
+        xn = xnew;
+        yn = ynew;
+        Count++;
+    }
+           d = sqrt((xn-x)*(xn-x)+(yn-y)*(yn-y));
+    return d;
+}
+// AAL Finish
