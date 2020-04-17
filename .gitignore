@@ -1,2 +1,17 @@
 main
 .build/
+
+
+*/.idea
+*/*.iml
+*/*.xml
+*/*.txt
+*/*.cmake
+*/Cmake*
+*/cmake*
+*/CXX*
+*/*.o
+*/*.*make
+*/*.cbp
+*/*.x
+
