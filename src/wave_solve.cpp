@@ -111,12 +111,14 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 	mask.define(1,istart,iend,jstart,jend);
 	mask.set_value(0);
 
+
 	// Bring out data pointer for message passing
     double* w_ptr = w.c_ptr();
 
     // Length of data to be sent and received left/right or up/down
     size_lr = iend-istart+1;
     size_ud = jend-jstart+1;
+<<<<<<< HEAD
     buf_size = (size_lr-2)*(size_ud-2);
     loc_sz[0] = (size_lr-2);
     loc_sz[1] = (size_ud-2);
@@ -199,6 +201,9 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
     MPI_Barrier(MPI_COMM_WORLD);
     delete[] mask_buf;
 
+    
+    // AAL
+    Compute_Mask(size_lr-1,size_ud-1);
 
     // Set up all communication subarrays.
     Setup_Subarrays(nolp);
@@ -242,57 +247,67 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 
 // Compute the mask for all points in the domain via 
 // the level set function (FMG fix)
-void Wave_Solve::Compute_Mask(){
+void Wave_Solve::Compute_Mask(int M, int N){
 
-	// double level_set_val;
-	// double x_val;
-	// int ghost_ctr = 0;
-	// int num_int = 0;
-	// int N = setup.N;
-	// int M = setup.M;
-	// bool bdry_check[4];
+     double level_set_val;
+     double distance;
+     double x_val;
+     int ghost_ctr = 0;
+     int num_int = 0;
+     bool bdry_check[4];
+    
 
-	// for(int i = 0;i<=M;i++){
-	// 	x_val = x(i);
-	// 	for(int j = 0;j<=N;j++){
-	// 		level_set_val = setup.Level_Set(x_val,y(j));
+     for(int i = 0;i<=M;i++){
+         x_val = x(i);
+         cout << x(i) << "\n";
+         for(int j = 0;j<=N;j++){
+             level_set_val = setup.Level_Set(x_val,y(j));
+
+             
 
 
-	// 		// Interior point
-	// 		if(level_set_val < 0.0){
-	// 			mask(i,j) = 1;
-	// 			num_int++;
-	// 		}
-	// 		// Exterior point
-	// 		else if(level_set_val > 0.0){
-	// 			mask(i,j) = 0;
-	// 		} 
-	// 		// Boundary point
-	// 		else{
-	// 			mask(i,j) = -1;
-	// 			ghost_ctr++;
-	// 		}
-	// 	}
-	// }
+             // Interior point
+             if(level_set_val < 0.0){
+                 mask(i,j) = 1;
+                 num_int++;
+             }
+             // Exterior point
+             else if(level_set_val > 0.0){
+                 mask(i,j) = 0;
+             }
+             // Boundary point
+             else{
+                 mask(i,j) = -1;
+                 ghost_ctr++;
+             }
+             cout << mask(i,j) << "  ";
+         }
+         cout << "\n";
+     }
+    // AAL need to identify which direction to use secant method along
+    // Possibly use the componets of the normal direction??
 
-	// // Identify an interior ghost point candidate
-	// for(int i = 0;i<=M;i++){
-	// 	x_val = x(i);
-	// 	for(int j = 0;j<=N;j++){
-	// 		if(mask(i,j) == 1){
-	// 			bdry_check[0] = mask(i-1,j) == 0;
-	// 			bdry_check[1] = mask(i+1,j) == 0;
-	// 			bdry_check[2] = mask(i,j-1) == 0;
-	// 			bdry_check[3] = mask(i,j+1) == 0;
-	// 		}
+     // Identify an interior ghost point candidate
+     for(int i = 0;i<=M;i++){
+         x_val = x(i);
+         for(int j = 0;j<=N;j++){
+             if(mask(i,j) == 1){
+                 bdry_check[0] = mask(i-1,j) == 0;
+                 bdry_check[1] = mask(i+1,j) == 0;
+                 bdry_check[2] = mask(i,j-1) == 0;
+                 bdry_check[3] = mask(i,j+1) == 0;
+             }
 
-	// 		if(bdry_check[0] || bdry_check[1] || bdry_check[2] || bdry_check[3]){
-	// 			mask(i,j) = -1;
-	// 			ghost_ctr++;
-	// 			num_int -= 1;
-	// 		}
-	// 	}
-	// }
+             if(bdry_check[0] || bdry_check[1] || bdry_check[2] || bdry_check[3]){
+                 mask(i,j) = -1;
+                 ghost_ctr++;
+                 num_int -= 1;
+             }
+             //cout << mask(i,j) << "  ";
+         }
+         //cout << "\n";
+     }
+    
 }
 
 // Fill in with initial data, compute the Laplacian, and do a 
