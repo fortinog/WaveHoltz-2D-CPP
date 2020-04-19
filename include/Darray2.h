@@ -1,6 +1,7 @@
 // A simple two dimensional array class that can use arbitrary index range
 #ifndef DARRAY2
 #define DARRAY2
+#include <mpi.h>
 
 class Darray2
 {
@@ -9,6 +10,7 @@ class Darray2
     Darray2( int x_s, int x_e, int y_s, int y_e);
     Darray2();
     ~Darray2() {if( m_data != 0 ) delete[] m_data;}
+
     void define( int nc, int x_s, int x_e, int y_s, int y_e);
     void define( int x_s, int x_e, int y_s, int y_e);
     inline double* c_ptr() {return m_data;}

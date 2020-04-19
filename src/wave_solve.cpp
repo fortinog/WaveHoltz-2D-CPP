@@ -1,13 +1,24 @@
 #include "wave_solve.hpp"
 
-// Set up the grid
-Wave_Solve::Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM){
+Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MPI_Comm IO_Comm){
 	int nsteps, nolp;
 	int ndims = 2;
 	int x_off, y_off;
 	int rank;
+	int* size_array;
+	int* mask_buf;
+	int* full_sz;
+	int node_rank;
+	int buf_size;
+	int proc_per_node;
+	int loc_sz[4];
+	double lap_err[3];
+	double sol_err[3];
 	double err;
 	double dt, dt2, idt2; 
+    char fName[100];   
+	FILE *extFile;
+    MPI_Status status;
 	Darray2 w, lap, wm, wp;
 
 	t = 0.0;
@@ -103,35 +114,129 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM){
 	// Bring out data pointer for message passing
     double* w_ptr = w.c_ptr();
 
-    // Length of data to be sent/received left/right or up/down
+    // Length of data to be sent and received left/right or up/down
     size_lr = iend-istart+1;
     size_ud = jend-jstart+1;
+    buf_size = (size_lr-2)*(size_ud-2);
+    loc_sz[0] = (size_lr-2);
+    loc_sz[1] = (size_ud-2);
+    loc_sz[2] = istart + 1 + Local_Grid.x_s - x_off;
+    loc_sz[3] = jstart + 1 + Local_Grid.y_s - y_off;
+
+    // For local compute node, find my rank and number of processes
+    MPI_Comm_rank(IO_Comm, &node_rank);
+    MPI_Comm_size(IO_Comm, &proc_per_node);
+
+    // Grab solution array sizes from each process on the node
+    if(node_rank == 0){
+    	size_array = new int[proc_per_node];
+    	full_sz = new int[4*proc_per_node];
+    }
+    MPI_Gather(loc_sz, 4, MPI_INT, full_sz, 4, MPI_INT, 0, IO_Comm);
+
+    // Print node data to file
+    if(node_rank == 0){
+    	sprintf(fName, "Node_Info_%4.4i.txt", node_ID);
+    	extFile = fopen(fName, "w");
+	    for(int i = 0;i<proc_per_node;i++){
+	    	size_array[i] = full_sz[4*i]*full_sz[4*i+1];
+			fprintf(extFile, "%1i %1i %1i %1i\n", full_sz[4*i], full_sz[4*i+1], full_sz[4*i+2], full_sz[4*i+3]);
+	    }
+    	fclose(extFile);
+    }
+    MPI_Barrier(IO_Comm);
+
+
+    // If I am the root process on a node allocate a receive buffer for IO
+    // large enough for all data, otherwise allocate just enough to copy
+    // local data sans halo region.
+    if(node_rank == 0){
+    	int* max_sz = max_element(size_array, size_array+proc_per_node);
+    	IO_buf = new double[*max_sz];
+    	mask_buf = new int[*max_sz];
+    } else{
+    	IO_buf = new double[buf_size];
+    	mask_buf = new int[buf_size];
+    }
+
+
+    /******************************************************************
+	* 						     Print mask 						  *
+    ******************************************************************/
+    if(node_rank == 0){
+    	sprintf(fName, "mask_%4.4i.txt", node_ID);
+
+	    extFile = fopen(fName, "w");
+
+	    // First write own data to file
+		for(int i=istart+1;i<=iend-1;i++){
+			for(int j=jstart+1;j<=jend-1;j++){
+				fprintf(extFile, "%1i\n", mask(i,j));
+			}
+		}
+
+		// Receive data from each process on the node and write to file.
+        for(int i = 1;i<proc_per_node;i++){
+        	int source = i;
+            MPI_Recv(mask_buf,size_array[i], MPI_INT, source, 420, IO_Comm, &status);
+		    
+		    for (int k=0; k<size_array[i]; k++){
+		    	fprintf(extFile, "%1i\n", mask_buf[k]);
+		    }
+        }
+    	fclose(extFile);
+    }
+    else{
+    	int counter = 0;
+		for(int i=istart+1;i<=iend-1;i++){
+			for(int j=jstart+1;j<=jend-1;j++){
+				mask_buf[counter] = w(i,j);
+				counter++;
+			}
+		}
+        MPI_Send(mask_buf, counter, MPI_INT, 0, 420, IO_Comm);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    delete[] mask_buf;
+
 
     // Set up all communication subarrays.
     Setup_Subarrays(nolp);
 
 	// Fill in w, wm, lap so that we can start time stepping immediately
 	Set_Initial_Data(wm, w, lap);
-	// Communicate_Solution(CART_COMM, w_ptr);
-	// for(int i=0;i<3;i++){
-	//     Time_Step(wm, w, wp, lap);
-	//     Compute_Laplacian(w,lap);
-	// 	Communicate_Solution(CART_COMM, w_ptr);
-	// }
+
+	// Solve PDE forward to final time specified in Problem_Setup
     Solve_PDE(wm, w, wp, lap, w_ptr, CART_COMM);
 
-	cout << scientific << right << setw(14)<< Compute_Solution_Error(1, w, CART_COMM);
-	cout << scientific << right << setw(14)<< Compute_Solution_Error(2, w, CART_COMM);
-	cout << scientific << right << setw(14)<< Compute_Solution_Error(3, w, CART_COMM);
-	cout << "\n";  
+    // Compute solution error (1, 2, Inf norms)
+    sol_err[0] = Compute_Solution_Error(1, w, CART_COMM);
+    sol_err[1] = Compute_Solution_Error(2, w, CART_COMM);
+    sol_err[2] = Compute_Solution_Error(3, w, CART_COMM);
+
+    // Compute Laplacian error (1, 2, Inf norms)
+    lap_err[0] = Compute_Laplacian_Error(1, lap, CART_COMM);
+    lap_err[1] = Compute_Laplacian_Error(2, lap, CART_COMM);
+    lap_err[2] = Compute_Laplacian_Error(3, lap, CART_COMM);
+
+	MPI_Barrier(CART_COMM);
+    if(rank == 0){
+    	cout << "Error in computing the Laplacian : ";
+		cout << scientific << right << setw(14)<< lap_err[0];
+		cout << scientific << right << setw(14)<< lap_err[1];
+		cout << scientific << right << setw(14)<< lap_err[2];
+		cout << "\n";
+
+    	cout << "Error in computing the solution : ";
+		cout << scientific << right << setw(14)<< sol_err[0];
+		cout << scientific << right << setw(14)<< sol_err[1];
+		cout << scientific << right << setw(14)<< sol_err[2];
+		cout << "\n";
+    }
 	MPI_Barrier(CART_COMM);
 
-	cout << scientific << right << setw(14)<< Compute_Laplacian_Error(1, lap, CART_COMM);
-	cout << scientific << right << setw(14)<< Compute_Laplacian_Error(2, lap, CART_COMM);
-	cout << scientific << right << setw(14)<< Compute_Laplacian_Error(3, lap, CART_COMM);
-	cout << "\n";  
-	MPI_Barrier(CART_COMM);
-
+	// Output the solution to a text file.
+	Print_Solution("out.txt", IO_buf, w, size_array, proc_per_node, node_rank, IO_Comm);
 	Finalize();
 }
 
@@ -205,7 +310,6 @@ void Wave_Solve::Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap){
 	Enforce_BC(w);
 	Compute_Laplacian(w, lap);
 	Taylor_Expand(wm,w,lap);
-	// Enforce_BC(wm);
 }
 
 // Forcing (method of manufactured solutions)
@@ -389,8 +493,6 @@ void Wave_Solve::Compute_Laplacian_NB(Darray2& w, Darray2& lap, MPI_Request* rec
 	xm = x(i-1);
 	x0 = x(i);
 	xp = x(i+1);
-
-	// Compute the usual Laplacian (inner only)
 	for(j=jstart+1;j<=jend-1;j++){
 
 		ym = y(j-1);
@@ -417,8 +519,6 @@ void Wave_Solve::Compute_Laplacian_NB(Darray2& w, Darray2& lap, MPI_Request* rec
 	xm = x(i-1);
 	x0 = x(i);
 	xp = x(i+1);
-
-	// Compute the usual Laplacian (inner only)
 	for(j=jstart+1;j<=jend-1;j++){
 
 		ym = y(j-1);
@@ -562,32 +662,6 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 	return err;
 }
 
-// // Double the number of grid points (for the purposes of testing convergence)
-// void Wave_Solve::Refine_Grid(){
-// 	int N = 2*setup.N;
-// 	int M = 2*setup.M;
-
-// 	// Double grid points and recalculate grid size
-// 	setup.N = N;
-// 	setup.M = M;
-// 	setup.hx = (setup.x_R-setup.x_L)/double(N+1);
-// 	setup.hy = (setup.y_R-setup.y_L)/double(M+1);
-
-// 	// Setup grid
-// 	x.define(1,0,N+1);
-// 	y.define(1,0,M+1);
-// 	for(int i=0;i<=N+1;i++) x(i) = setup.x_L + i*setup.hx;
-// 	for(int i=0;i<=M+1;i++) y(i) = setup.y_L + i*setup.hy;
-
-// 	// Resize working arrays
-// 	w.define(1,0,N+1,0,M+1);
-// 	w.set_value(0.0);
-// 	lap.define(1,0,N+1,0,M+1);
-// 	lap.set_value(0.0);
-// 	mask.define(1,0,N+1,0,M+1);
-// 	mask.set_value(0);	
-// }
-
 //	Do a Taylor expansion to fill in w_{-1} \approx w(-dt).
 void Wave_Solve::Taylor_Expand(Darray2& wm, Darray2& w, Darray2& lap){
 	Twilight mms(setup);
@@ -641,15 +715,6 @@ double Wave_Solve::Compute_Energy(Darray2& wm, Darray2& w, Darray2& lap, MPI_Com
 	return 0.5*setup.hx*setup.hy*total_energy;
 }
 
-// // Set everything to zero for convergence tests
-// void Wave_Solve::Clear_Data(){
-// 	(*this).t = 0.0;
-// 	w.set_value(0.0);
-// 	wp.set_value(0.0);
-// 	wm.set_value(0.0);
-// 	lap.set_value(0.0);
-// }
-
 // Do the full wave solve. Note: This currently prints out the 
 // energy for every time step.
 void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, double* w_ptr, MPI_Comm CART_COMM){
@@ -664,10 +729,9 @@ void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, d
         cout << scientific << right << setw(14)<< abs(energy-energy_old)/abs(energy_old) << "\n";
 	    energy_old = energy;
 	    Communicate_Solution(CART_COMM,w_ptr,send_req,recv_req);
-        MPI_Waitall( 4, send_req, MPI_STATUSES_IGNORE );
 	    Compute_Laplacian_NB(w, lap, recv_req);
+        MPI_Waitall( 4, send_req, MPI_STATUSES_IGNORE );
 	}
-
 }
 
 // This routine sets up the communication subarrays to simplify MPI calls.
@@ -799,14 +863,59 @@ void Wave_Solve::Communicate_Solution(MPI_Comm CART_COMM, double* w_ptr, MPI_Req
     MPI_Irecv(w_ptr, 1, sub_recv_up, up_neigh, tag, CART_COMM, &recv_req[3]);
 }
 
+
+// Communicate data to root process of each node and then write to a file.
+void Wave_Solve::Print_Solution(char* FileName, double* IO_buf, Darray2& w, int* size_array, 
+								int proc_per_node, 
+								int node_rank, 
+								MPI_Comm IO_Comm){
+    MPI_Status status;
+    int tag = 22;
+    int source;
+    int counter;
+
+    if(node_rank == 0){
+	    FILE *extFile = fopen(FileName, "w");
+
+	    // First write own data to file
+		for(int i=istart+1;i<=iend-1;i++){
+			for(int j=jstart+1;j<=jend-1;j++){
+				fprintf(extFile, "%18.10e\n", w(i,j));
+			}
+		}
+
+		// Receive data from each process on the node and write to file.
+        for(int i = 1;i<proc_per_node;i++){
+        	source = i;
+            MPI_Recv(IO_buf,size_array[i], MPI_DOUBLE, source, tag, IO_Comm, &status);
+		    
+		    for (int k=0; k<size_array[i]; k++){
+		    	fprintf(extFile, "%18.10e\n", IO_buf[k]);
+		    }
+        }
+    	fclose(extFile);
+    }
+    else{
+    	counter = 0;
+		for(int i=istart+1;i<=iend-1;i++){
+			for(int j=jstart+1;j<=jend-1;j++){
+				IO_buf[counter] = w(i,j);
+				counter++;
+			}
+		}
+        MPI_Send(IO_buf, counter, MPI_DOUBLE, 0, tag, IO_Comm);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
 // Free MPI communication types
 void Wave_Solve::Finalize(){
-	MPI_Type_free( &sub_send_left ); 
-	MPI_Type_free( &sub_recv_left);
+	MPI_Type_free( &sub_send_left  ); 
+	MPI_Type_free( &sub_recv_left  );
 	MPI_Type_free( &sub_send_right ); 
-	MPI_Type_free( &sub_recv_right);
-	MPI_Type_free( &sub_send_up );
-	MPI_Type_free( &sub_recv_up);
-	MPI_Type_free( &sub_send_down ); 
-	MPI_Type_free( &sub_recv_down);
+	MPI_Type_free( &sub_recv_right );
+	MPI_Type_free( &sub_send_up    );
+	MPI_Type_free( &sub_recv_up    );
+	MPI_Type_free( &sub_send_down  ); 
+	MPI_Type_free( &sub_recv_down  );
 }

@@ -1,8 +1,3 @@
-/*
-	This is the class that will (eventually) do a wave solve. For now
-	we simply load the problem setup, define the grid, compute the 
-	mask, and then compute the Laplacian
-*/
 #ifndef WAVE_SOLVE
 #define WAVE_SOLVE
 
@@ -25,7 +20,8 @@ using namespace std;
 class Wave_Solve {
 public:
 	ProblemSetup setup;
-	// Darray2 w, lap, wm, wp;
+
+	// MPI derived data types for communication
     MPI_Datatype sub_send_left;
     MPI_Datatype sub_recv_left;
     MPI_Datatype sub_send_right;
@@ -35,11 +31,14 @@ public:
     MPI_Datatype sub_send_down;
     MPI_Datatype sub_recv_down;
 
+    // Requests for persistent communication
+    MPI_Request send_req[4];
+    MPI_Request recv_req[4];
 
 	Iarray2 mask;
 	Darray1 x, y;
 	double t;
-	// double* w_ptr;
+	double* IO_buf;
 
 	int istart, iend, jstart, jend, N, M;
 	int j_left_start, j_left_end, i_down_start, i_down_end;
@@ -48,8 +47,8 @@ public:
 	int up_neigh, down_neigh, left_neigh, right_neigh;
 	int size_lr, size_ud;
 
-	Wave_Solve(Subdomain Local_Grid, MPI_Comm CART_COMM);
-	virtual ~Wave_Solve() {};
+	Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MPI_Comm IO_Comm);
+	virtual ~Wave_Solve() {if( IO_buf != 0 ) delete[] IO_buf;};
 	void    Compute_Mask();
 	void    Find_Ghost_Points();
 	void    Fill_In_Ghost_Values();
@@ -66,6 +65,7 @@ public:
 	void    Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, double* w_ptr, MPI_Comm CART_COMM);
 	void    Communicate_Solution(MPI_Comm CART_COMM, double* w_ptr, MPI_Request* send_req, MPI_Request* recv_req);
 	void    Setup_Subarrays(const int nolp);
+	void    Print_Solution(char* FileName,double* IO_buf, Darray2& w, int* size_array, int proc_per_node, int node_rank, MPI_Comm IO_Comm);
 	void    Finalize();
 };
 #endif

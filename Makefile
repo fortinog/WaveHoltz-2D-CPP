@@ -2,7 +2,7 @@
 SRC_DIR    = src
 INC_DIR    = include
 BUILD_DIR  = .build
-LDFLAGS    = 
+LDFLAGS    = ""
 LDPATH     = SRC_DIR
 
 # list all source and object files
@@ -13,7 +13,7 @@ INC        = -I$(INC_DIR)
 
 # CXX        = g++
 CXX        = mpicxx
-CXXFLAGS   = -O3
+CXXFLAGS   = -O3 
 
 # Rule for linking main
 main: $(OBJ_FILES)
