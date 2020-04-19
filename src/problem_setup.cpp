@@ -75,11 +75,11 @@ ProblemSetup::ProblemSetup():
 double ProblemSetup::Level_Set(const double x, const double y){
 	
     // [x_L,x_R]x[y_L,y_R]
-	// double xval, yval, l_val;
-	// xval = std::min(x-(*this).x_L,(*this).x_R-x);
-	// yval = std::min(y-(*this).y_L,(*this).y_R-y);
-	// l_val = -std::min(xval,yval);
-	// return l_val;
+	double xval, yval, l_val;
+	xval = std::min(x-(*this).x_L,(*this).x_R-x);
+	yval = std::min(y-(*this).y_L,(*this).y_R-y);
+	l_val = -std::min(xval,yval);
+	return l_val;
     
 	// double xval, yval, l_val;
 	// xval = std::min(x+0.5,0.5-x);
@@ -88,10 +88,10 @@ double ProblemSetup::Level_Set(const double x, const double y){
 	// return l_val;
     
 
-    // Circle of radius 1
-    double r = pow(x,2) + pow(y,2);
-    double l_val = r-pow(0.8,2);
-    return l_val;
+    // // Circle of radius 1
+    // double r = pow(x,2) + pow(y,2);
+    // double l_val = r-pow(0.8,2);
+    // return l_val;
 }
 
 // Speed of sound in the medium

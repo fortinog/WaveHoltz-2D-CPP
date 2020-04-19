@@ -279,33 +279,15 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 	double x0, y0;
 	double t = (*this).t;
 
-	// Left boundary
-	i = istart;
-	x0 = x(i);
-	for(j=j_left_start;j<=j_left_end;j++){
-		v(i,j) = mms.trigTwilight(0,x0,0,y(j),0,t);
+
+	// If a node point is a physical boundary, fill in value for 
+	// Dirichlet boundary condition.
+	for(int k = 1;k<n_bdry;k++){
+		i = bdry_list(k,1);
+		j = bdry_list(k,2);
+		v(i,j) =  mms.trigTwilight(0,x(i),0,y(j),0,t);
 	}
 
-	// Right boundary
-	i = iend;
-	x0 = x(i);
-	for(j=j_right_start;j<=j_right_end;j++){
-		v(i,j) = mms.trigTwilight(0,x0,0,y(j),0,t);
-	}
-
-	// Bottom boundary
-	j = jstart;
-	y0 = y(j);
-	for(i=i_down_start;i<=i_down_end;i++){
-		v(i,j) = mms.trigTwilight(0,x(i),0,y0,0,t);
-	}
-
-	// Top boundary
-	j = jend;
-	y0 = y(j);
-	for(i=i_up_start;i<=i_up_end;i++){
-		v(i,j) = mms.trigTwilight(0,x(i),0,y0,0,t);
-	}
 }
 
 

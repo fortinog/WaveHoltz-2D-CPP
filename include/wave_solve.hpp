@@ -78,6 +78,7 @@ void Compute_Mask(){
      int n_up = 0;
      int n_down = 0;
      int dir_ctr[4];
+     int n_phys = 0;
 
      bool bdry_check[4];
      for(int i = istart;i<=iend;i++){
@@ -97,7 +98,7 @@ void Compute_Mask(){
              // Boundary point
              else{
                  mask(i,j) = -2;
-                 n_bdry++;
+                 n_phys++;
              }
          }
      }
@@ -165,14 +166,15 @@ void Compute_Mask(){
     	ghost_list_down.define(1,1,n_down,1,2);
     	dist_list_down.define(1,1,n_down);
     }
-    if(n_bdry > 0){
-    	bdry_list.define(1,1,n_bdry,1,2);
+    if(n_phys > 0){
+    	bdry_list.define(1,1,n_phys,1,2);
     }
 
     n_ghost_right = n_right;
     n_ghost_left = n_left;
     n_ghost_up = n_up;
     n_ghost_down = n_down;
+    n_bdry = n_phys;
 
     for(int i = 0;i<4;i++) dir_ctr[i] = 1;
 
@@ -213,11 +215,17 @@ void Compute_Mask(){
         			dir_ctr[3] = dir_ctr[3]+1;
         		}
         	}
+        } 
+    }
 
-        	// If a grid point is on the physical boundary, track it's indices
+
+    for(int i = istart;i<=iend;i++){
+        for(int j = jstart;j<=jend;j++){
+        	// If a grid point is on the physical boundary, track its indices
         	if(mask(i,j) == -2){
         		bdry_list(ctr,1) = i;
         		bdry_list(ctr,2) = j;
+        		ctr++;
         	} 
         }
     }
