@@ -35,17 +35,21 @@ public:
     MPI_Request send_req[4];
     MPI_Request recv_req[4];
 
+	// Communication data
+	int up_neigh, down_neigh, left_neigh, right_neigh;
+	int size_lr, size_ud;
+	double* IO_buf;
+
 	Iarray2 mask, ghost_list_left, ghost_list_right, ghost_list_up, ghost_list_down;
 	Darray1 x, y, dist_list_left, dist_list_right, dist_list_up, dist_list_down;
 	double t;
-	double* IO_buf;
+	int n_ghost_right, n_ghost_left, n_ghost_up, n_ghost_down;
 
 	int istart, iend, jstart, jend, N, M;
 	int j_left_start, j_left_end, i_down_start, i_down_end;
 	int j_right_start, j_right_end, i_up_start, i_up_end;
 
-	int up_neigh, down_neigh, left_neigh, right_neigh;
-	int size_lr, size_ud;
+
 
 	Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MPI_Comm IO_Comm);
 	virtual ~Wave_Solve() {if( IO_buf != 0 ) delete[] IO_buf;};

@@ -329,16 +329,36 @@ void Wave_Solve::Compute_Mask(){
 
 
     // Store list of indices, directions, and distances for each ghost point
-    ghost_list_left.define(1,1,n_left,1,2);
-    dist_list_left.define(1,1,n_left);
-    ghost_list_right.define(1,1,n_right,1,2);
-    dist_list_right.define(1,1,n_right);
-    ghost_list_up.define(1,1,n_up,1,2);
-    dist_list_up.define(1,1,n_up);
-    ghost_list_down.define(1,1,n_down,1,2);
-    dist_list_down.define(1,1,n_down);
+    if(n_left > 0){
+    	ghost_list_left.define(1,1,n_left,1,2);
+    	dist_list_left.define(1,1,n_left);
+    }
+    if(n_right > 0){
+    	ghost_list_right.define(1,1,n_right,1,2);
+    	dist_list_right.define(1,1,n_right);
+    }
+    if(n_up > 0){
+    	ghost_list_up.define(1,1,n_up,1,2);
+    	dist_list_up.define(1,1,n_up);
+    }
+    if(n_down > 0){
+    	ghost_list_down.define(1,1,n_down,1,2);
+    	dist_list_down.define(1,1,n_down);
+    }
+    // ghost_list_left.define(1,1,n_left,1,2);
+    // dist_list_left.define(1,1,n_left);
+    // ghost_list_right.define(1,1,n_right,1,2);
+    // dist_list_right.define(1,1,n_right);
+    // ghost_list_up.define(1,1,n_up,1,2);
+    // dist_list_up.define(1,1,n_up);
+    // ghost_list_down.define(1,1,n_down,1,2);
+    // dist_list_down.define(1,1,n_down);
+    n_ghost_right = n_right;
+    n_ghost_left = n_left;
+    n_ghost_up = n_up;
+    n_ghost_down = n_down;
 
-    for(int i = 0;i<4;i++) dir_ctr[i] = 0;
+    for(int i = 0;i<4;i++) dir_ctr[i] = 1;
 
     for(int i = istart+1;i<=iend-1;i++){
         for(int j = jstart+1;j<=jend-1;j++){
@@ -349,7 +369,7 @@ void Wave_Solve::Compute_Mask(){
         			ghost_list_right(dir_ctr[0],1) = i;
         			ghost_list_right(dir_ctr[0],2) = j;
         			dist_list_right(dir_ctr[0]) = setup.Dist_to_bdry(x(i), x(i+1), y(j), y(j),1)/setup.hx;
-        			dir_ctr[0]++;
+        			dir_ctr[0] = dir_ctr[0]+1;
         		}
 
         		// Up
@@ -357,7 +377,8 @@ void Wave_Solve::Compute_Mask(){
         			ghost_list_up(dir_ctr[1],1) = i;
         			ghost_list_up(dir_ctr[1],2) = j;
         			dist_list_up(dir_ctr[1]) = setup.Dist_to_bdry(x(i), x(i), y(j), y(j+1),2)/setup.hy;
-        			dir_ctr[1]++;
+        			dir_ctr[1] = dir_ctr[1]+1;
+        			cout << dist_list_up(dir_ctr[1]-1) << "\n";
         		}
 
         		// Left
@@ -365,7 +386,7 @@ void Wave_Solve::Compute_Mask(){
         			ghost_list_left(dir_ctr[2],1) = i;
         			ghost_list_left(dir_ctr[2],2) = j;
         			dist_list_left(dir_ctr[2]) = setup.Dist_to_bdry(x(i), x(i-1), y(j), y(j),1)/setup.hx;
-        			dir_ctr[2]++;
+        			dir_ctr[2] = dir_ctr[2]+1;
         		}
 
         		// Down
@@ -373,7 +394,7 @@ void Wave_Solve::Compute_Mask(){
         			ghost_list_down(dir_ctr[3],1) = i;
         			ghost_list_down(dir_ctr[3],2) = j;
         			dist_list_down(dir_ctr[3]) = setup.Dist_to_bdry(x(i), x(i), y(j), y(j-1),2)/setup.hy;
-        			dir_ctr[3]++;
+        			dir_ctr[3] = dir_ctr[3]+1;
         		}
         	} 
         }
