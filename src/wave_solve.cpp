@@ -251,8 +251,15 @@ void Wave_Solve::Compute_Mask(){
      double x_val;
      int ghost_ctr = 0;
      int num_int = 0;
+     int bdry_ctr = 0;
+     int ctr =0;
+     int n_left = 0;
+     int n_right = 0;
+     int n_up = 0;
+     int n_down = 0;
+     int dir_ctr[4];
+
      bool bdry_check[4];
-    
      for(int i = istart;i<=iend;i++){
          x_val = x(i);
          for(int j = jstart;j<=jend;j++){
@@ -270,7 +277,7 @@ void Wave_Solve::Compute_Mask(){
              // Boundary point
              else{
                  mask(i,j) = -2;
-                 ghost_ctr++;
+                 bdry_ctr++;
              }
          }
      }
@@ -278,41 +285,99 @@ void Wave_Solve::Compute_Mask(){
     // Possibly use the componets of the normal direction??
 
      // Identify an interior ghost point candidate
-     for(int i = istart+1;i<=iend-1;i++){
-         for(int j = jstart+1;j<=jend-1;j++){
-             if(mask(i,j) == 1){
-                 bdry_check[0] = ((mask(i-1,j) == 0) || (mask(i-1,j) == -3));
-                 bdry_check[1] = ((mask(i+1,j) == 0) || (mask(i+1,j) == -3));
-                 bdry_check[2] = ((mask(i,j-1) == 0) || (mask(i,j-1) == -3));
-                 bdry_check[3] = ((mask(i,j+1) == 0) || (mask(i,j+1) == -3));
+    for(int i = istart+1;i<=iend-1;i++){
+        for(int j = jstart+1;j<=jend-1;j++){
+            if(mask(i,j) == 1){
+                bdry_check[0] = ((mask(i-1,j) == 0) || (mask(i-1,j) == -3));
+                bdry_check[1] = ((mask(i+1,j) == 0) || (mask(i+1,j) == -3));
+                bdry_check[2] = ((mask(i,j-1) == 0) || (mask(i,j-1) == -3));
+                bdry_check[3] = ((mask(i,j+1) == 0) || (mask(i,j+1) == -3));
 
-	             // if(bdry_check[0] || bdry_check[1] || bdry_check[2] || bdry_check[3]){
-	             //     mask(i,j) = -1;
-	             //     ghost_ctr++;
-	             //     num_int -= 1;
-	             // }
 
-	             // Alternative to label exterior ghost points as well
-	             if(bdry_check[0]){
+	             // Update mask for exterior ghost points and related interior point
+	            if(bdry_check[0]){
 	             	mask(i,j) = -1;
 	             	mask(i-1,j) = -3;
-	             }
-	             if(bdry_check[1]){
+	             	ghost_ctr++;
+	             	n_left++;
+	             	num_int--;
+	            }
+	            if(bdry_check[1]){
 	             	mask(i,j) = -1;
 	             	mask(i+1,j) = -3;
-	             }
-	             if(bdry_check[2]){
+	             	ghost_ctr++;
+	             	n_right++;
+	             	num_int--;
+	            }
+	            if(bdry_check[2]){
 	             	mask(i,j) = -1;
 	             	mask(i,j-1) = -3;
-	             }
-	             if(bdry_check[3]){
+	             	ghost_ctr++;
+	             	n_down++;
+	             	num_int--;
+	            }
+	            if(bdry_check[3]){
 	             	mask(i,j) = -1;
 	             	mask(i,j+1) = -3;
-	             }
-             }
+	             	ghost_ctr++;
+	             	n_up++;
+	             	num_int--;
+	            }
+            }
+        }
+    }
 
-         }
-     }
+
+    // Store list of indices, directions, and distances for each ghost point
+    ghost_list_left.define(1,1,n_left,1,2);
+    dist_list_left.define(1,1,n_left);
+    ghost_list_right.define(1,1,n_right,1,2);
+    dist_list_right.define(1,1,n_right);
+    ghost_list_up.define(1,1,n_up,1,2);
+    dist_list_up.define(1,1,n_up);
+    ghost_list_down.define(1,1,n_down,1,2);
+    dist_list_down.define(1,1,n_down);
+
+    for(int i = 0;i<4;i++) dir_ctr[i] = 0;
+
+    for(int i = istart+1;i<=iend-1;i++){
+        for(int j = jstart+1;j<=jend-1;j++){
+        	if(mask(i,j) == -1){
+
+        		// Right
+        		if(mask(i+1,j) == -3){
+        			ghost_list_right(dir_ctr[0],1) = i;
+        			ghost_list_right(dir_ctr[0],2) = j;
+        			dist_list_right(dir_ctr[0]) = setup.Dist_to_bdry(x(i), x(i+1), y(j), y(j),1)/setup.hx;
+        			dir_ctr[0]++;
+        		}
+
+        		// Up
+        		if(mask(i,j+1) == -3){
+        			ghost_list_up(dir_ctr[1],1) = i;
+        			ghost_list_up(dir_ctr[1],2) = j;
+        			dist_list_up(dir_ctr[1]) = setup.Dist_to_bdry(x(i), x(i), y(j), y(j+1),2)/setup.hy;
+        			dir_ctr[1]++;
+        		}
+
+        		// Left
+        		if(mask(i-1,j) == -3){
+        			ghost_list_left(dir_ctr[2],1) = i;
+        			ghost_list_left(dir_ctr[2],2) = j;
+        			dist_list_left(dir_ctr[2]) = setup.Dist_to_bdry(x(i), x(i-1), y(j), y(j),1)/setup.hx;
+        			dir_ctr[2]++;
+        		}
+
+        		// Down
+        		if(mask(i,j-1) == -3){
+        			ghost_list_down(dir_ctr[3],1) = i;
+        			ghost_list_down(dir_ctr[3],2) = j;
+        			dist_list_down(dir_ctr[3]) = setup.Dist_to_bdry(x(i), x(i), y(j), y(j-1),2)/setup.hy;
+        			dir_ctr[3]++;
+        		}
+        	} 
+        }
+    }
     
 }
 

@@ -42,6 +42,6 @@ struct ProblemSetup {
 	ProblemSetup();
 	double Level_Set(const double x, const double y);
 	double c2(const double x, const double y);
-	double Dist_to_bdry(const double x, const double y,int dir);
+	double Dist_to_bdry(const double x_in, const double x_out, const double y_in, const double y_out,int dir);
 };
 #endif

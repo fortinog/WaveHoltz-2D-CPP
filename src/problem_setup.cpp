@@ -104,24 +104,29 @@ double ProblemSetup::c2(const double x, const double y){
 // AAL Start
 // Use secant method to find the distance to the boundary
 // xn+1 = xn - f(xn-1)(xn-1 - xn-2)/(f(xn-1) - f(xn-2))
-double ProblemSetup::Dist_to_bdry(const double x, const double y,int dir){
+double ProblemSetup::Dist_to_bdry(const double x_in, const double x_out, 
+								  const double y_in, const double y_out,
+								  int dir){
     double d, tol,xold,xn,xnew,yold,yn,ynew;
     double num, denom, alpha;
     int k;
+	int maxIter = 30;
+
     tol = 10e-10; // Tolerance
+
     // Inital Guesses are midpoint of domain and Ghost pt
     if (dir == 1){
-    	xold = 0.5;  // Midpoint of x interval
-    	yold = y;  // y val
+    	xold = x_out;  // exterior point
+    	yold = y_in;  // y val
     }
     else if (dir == 2){
-    	xold = x;    // x val
-    	yold = 0.5;  // Midpoint of y interval
+    	xold = x_in;    // x val
+    	yold = y_out;  // exterior point
     }
-    xn = x;
-    yn = y;
+    xn = x_in;
+    yn = y_in;
     int Count = 0;
-    while (abs(Level_Set(xn,yn)) > tol){
+    while ((abs(Level_Set(xn,yn)) > tol) && (Count <= maxIter)){
         num = Level_Set(xn,yn);
         denom = Level_Set(xn,yn) - Level_Set(xold,yold);
         alpha = num/denom;
@@ -134,7 +139,7 @@ double ProblemSetup::Dist_to_bdry(const double x, const double y,int dir){
         yn = ynew;
         Count++;
     }
-    d = sqrt((xn-x)*(xn-x)+(yn-y)*(yn-y));
+    d = sqrt((xn-x_in)*(xn-x_in)+(yn-y_in)*(yn-y_in));
     return d;
 }
 // AAL Finish

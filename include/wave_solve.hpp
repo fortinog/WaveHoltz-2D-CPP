@@ -35,8 +35,8 @@ public:
     MPI_Request send_req[4];
     MPI_Request recv_req[4];
 
-	Iarray2 mask;
-	Darray1 x, y;
+	Iarray2 mask, ghost_list_left, ghost_list_right, ghost_list_up, ghost_list_down;
+	Darray1 x, y, dist_list_left, dist_list_right, dist_list_up, dist_list_down;
 	double t;
 	double* IO_buf;
 
