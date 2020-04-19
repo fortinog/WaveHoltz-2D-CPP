@@ -109,7 +109,7 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 	lap.define(1,istart,iend,jstart,jend);
 	lap.set_value(0.0);
 	mask.define(1,istart,iend,jstart,jend);
-	mask.set_value(0);
+	mask.set_value(10);
 
 
 	// Bring out data pointer for message passing
@@ -118,7 +118,6 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
     // Length of data to be sent and received left/right or up/down
     size_lr = iend-istart+1;
     size_ud = jend-jstart+1;
-<<<<<<< HEAD
     buf_size = (size_lr-2)*(size_ud-2);
     loc_sz[0] = (size_lr-2);
     loc_sz[1] = (size_ud-2);
@@ -163,8 +162,9 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 
 
     /******************************************************************
-	* 						     Print mask 						  *
+	* 				    Compute and Print mask 						  *
     ******************************************************************/
+    Compute_Mask();
     if(node_rank == 0){
     	sprintf(fName, "mask_%4.4i.txt", node_ID);
 
@@ -192,7 +192,7 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
     	int counter = 0;
 		for(int i=istart+1;i<=iend-1;i++){
 			for(int j=jstart+1;j<=jend-1;j++){
-				mask_buf[counter] = w(i,j);
+				mask_buf[counter] = mask(i,j);
 				counter++;
 			}
 		}
@@ -200,10 +200,7 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
     }
     MPI_Barrier(MPI_COMM_WORLD);
     delete[] mask_buf;
-
     
-    // AAL
-    Compute_Mask(size_lr-1,size_ud-1);
 
     // Set up all communication subarrays.
     Setup_Subarrays(nolp);
@@ -247,7 +244,7 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 
 // Compute the mask for all points in the domain via 
 // the level set function (FMG fix)
-void Wave_Solve::Compute_Mask(int M, int N){
+void Wave_Solve::Compute_Mask(){
 
      double level_set_val;
      double distance;
@@ -256,15 +253,10 @@ void Wave_Solve::Compute_Mask(int M, int N){
      int num_int = 0;
      bool bdry_check[4];
     
-
-     for(int i = 0;i<=M;i++){
+     for(int i = istart;i<=iend;i++){
          x_val = x(i);
-         cout << x(i) << "\n";
-         for(int j = 0;j<=N;j++){
+         for(int j = jstart;j<=jend;j++){
              level_set_val = setup.Level_Set(x_val,y(j));
-
-             
-
 
              // Interior point
              if(level_set_val < 0.0){
@@ -277,35 +269,49 @@ void Wave_Solve::Compute_Mask(int M, int N){
              }
              // Boundary point
              else{
-                 mask(i,j) = -1;
+                 mask(i,j) = -2;
                  ghost_ctr++;
              }
-             cout << mask(i,j) << "  ";
          }
-         cout << "\n";
      }
     // AAL need to identify which direction to use secant method along
     // Possibly use the componets of the normal direction??
 
      // Identify an interior ghost point candidate
-     for(int i = 0;i<=M;i++){
-         x_val = x(i);
-         for(int j = 0;j<=N;j++){
+     for(int i = istart+1;i<=iend-1;i++){
+         for(int j = jstart+1;j<=jend-1;j++){
              if(mask(i,j) == 1){
-                 bdry_check[0] = mask(i-1,j) == 0;
-                 bdry_check[1] = mask(i+1,j) == 0;
-                 bdry_check[2] = mask(i,j-1) == 0;
-                 bdry_check[3] = mask(i,j+1) == 0;
+                 bdry_check[0] = ((mask(i-1,j) == 0) || (mask(i-1,j) == -3));
+                 bdry_check[1] = ((mask(i+1,j) == 0) || (mask(i+1,j) == -3));
+                 bdry_check[2] = ((mask(i,j-1) == 0) || (mask(i,j-1) == -3));
+                 bdry_check[3] = ((mask(i,j+1) == 0) || (mask(i,j+1) == -3));
+
+	             // if(bdry_check[0] || bdry_check[1] || bdry_check[2] || bdry_check[3]){
+	             //     mask(i,j) = -1;
+	             //     ghost_ctr++;
+	             //     num_int -= 1;
+	             // }
+
+	             // Alternative to label exterior ghost points as well
+	             if(bdry_check[0]){
+	             	mask(i,j) = -1;
+	             	mask(i-1,j) = -3;
+	             }
+	             if(bdry_check[1]){
+	             	mask(i,j) = -1;
+	             	mask(i+1,j) = -3;
+	             }
+	             if(bdry_check[2]){
+	             	mask(i,j) = -1;
+	             	mask(i,j-1) = -3;
+	             }
+	             if(bdry_check[3]){
+	             	mask(i,j) = -1;
+	             	mask(i,j+1) = -3;
+	             }
              }
 
-             if(bdry_check[0] || bdry_check[1] || bdry_check[2] || bdry_check[3]){
-                 mask(i,j) = -1;
-                 ghost_ctr++;
-                 num_int -= 1;
-             }
-             //cout << mask(i,j) << "  ";
          }
-         //cout << "\n";
      }
     
 }

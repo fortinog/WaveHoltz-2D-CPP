@@ -47,6 +47,7 @@ int main(int argc, char * argv[])
             fprintf(extFile, "%18.10e\n", setup.y_L + i*setup.hy);
         }
         fclose(extFile);
+
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -102,4 +103,3 @@ int main(int argc, char * argv[])
     int finalize_retcode = MPI_Finalize();
     return finalize_retcode;
 }
-
