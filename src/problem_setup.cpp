@@ -4,15 +4,15 @@
 /*	    HERE IS WHERE WE EDIT THE PROBLEM PARAMETERS	    */
 /************************************************************/
 
-static const int	defaultN = 20;
-static const int	defaultM = 20;
+static const int	defaultN = 80;
+static const int	defaultM = 80;
 
-static const double	defaultXl					= -1.0;
-static const double	defaultXr					= 1.0;
-static const double	defaultYl					= -1.0;
-static const double	defaultYr					= 1.0;
+static const double	defaultXl					= -0.1;
+static const double	defaultXr					= 1.1;
+static const double	defaultYl					= -0.1;
+static const double	defaultYr					= 1.1;
 
-static const double	defaultCFL					= 0.5;
+static const double	defaultCFL					= 0.1;
 static const double	defaultFinalTime			= 1.0;
 
 static const int	defaultTwilightType			= 1;
@@ -25,7 +25,7 @@ static const double	defaultY0					= 0.0;
 static const double	defaultT0					= 0.0*M_PI;
 
 static const double	defaultCx[5]				= {1,0,0,0,0};
-static const double	defaultCy[5]				= {0,0,0,0,1};
+static const double	defaultCy[5]				= {1,0,0,0,0};
 static const double	defaultCt[5]				= {1,0,0,0,0};
 
 /************************************************************/
@@ -75,20 +75,20 @@ ProblemSetup::ProblemSetup():
 double ProblemSetup::Level_Set(const double x, const double y){
 	
     // [x_L,x_R]x[y_L,y_R]
-	double xval, yval, l_val;
-	xval = std::min(x-(*this).x_L,(*this).x_R-x);
-	yval = std::min(y-(*this).y_L,(*this).y_R-y);
-	l_val = -std::min(xval,yval);
-	return l_val;
-    
 	// double xval, yval, l_val;
-	// xval = std::min(x+0.5,0.5-x);
-	// yval = std::min(y+0.5,0.5-y);
+	// xval = std::min(x-(*this).x_L,(*this).x_R-x);
+	// yval = std::min(y-(*this).y_L,(*this).y_R-y);
 	// l_val = -std::min(xval,yval);
 	// return l_val;
     
+	double xval, yval, l_val;
+	xval = std::min(x+0.0,1.0-x);
+	yval = std::min(y+0.0,1.0-y);
+	l_val = -std::min(xval,yval);
+	return l_val;
+    
 
-    // // Circle of radius 1
+    // Circle of radius 1
     // double r = pow(x,2) + pow(y,2);
     // double l_val = r-pow(0.8,2);
     // return l_val;
@@ -112,7 +112,7 @@ double ProblemSetup::Dist_to_bdry(const double x_in, const double x_out,
     int k;
 	int maxIter = 30;
 
-    tol = 10e-10; // Tolerance
+    tol = 10e-13; // Tolerance
 
     // Inital Guesses are midpoint of domain and Ghost pt
     if (dir == 1){
@@ -140,6 +140,7 @@ double ProblemSetup::Dist_to_bdry(const double x_in, const double x_out,
         Count++;
     }
     d = sqrt((xn-x_in)*(xn-x_in)+(yn-y_in)*(yn-y_in));
+
     return d;
 }
 // AAL Finish

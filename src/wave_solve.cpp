@@ -271,23 +271,59 @@ double Wave_Solve::forcing(const double x0, const double y0, const double t0){
 }
 
 
-// Enforce the boundary conditions. In this simple case, fill in
-// the boundary data.
+// Enforce the boundary conditions. FMG: Dirichlet boundary conditions only.
 void Wave_Solve::Enforce_BC(Darray2 &v){
 	Twilight mms(setup);
 	int i,j;
 	double x0, y0;
 	double t = (*this).t;
+	double alpha;
+	double bc_val;
 
 
 	// If a node point is a physical boundary, fill in value for 
 	// Dirichlet boundary condition.
-	for(int k = 1;k<n_bdry;k++){
+	for(int k = 1;k<=n_bdry;k++){
 		i = bdry_list(k,1);
 		j = bdry_list(k,2);
 		v(i,j) =  mms.trigTwilight(0,x(i),0,y(j),0,t);
 	}
 
+	// Boundary is right
+	for(int k=1;k<=n_ghost_right;k++){
+		alpha = dist_list_right(k);
+		i = ghost_list_right(k,1);
+		j = ghost_list_right(k,2);
+		bc_val =  mms.trigTwilight(0,x(i) + alpha*setup.hx,0,y(j),0,t);
+		v(i,j) = (bc_val + alpha*v(i-1,j))/(1+alpha);
+	}
+
+	// Boundary is left
+	for(int k=1;k<=n_ghost_left;k++){
+		alpha = dist_list_left(k);
+		i = ghost_list_left(k,1);
+		j = ghost_list_left(k,2);
+		bc_val =  mms.trigTwilight(0,x(i) - alpha*setup.hx,0,y(j),0,t);
+		v(i,j) = (bc_val + alpha*v(i+1,j))/(1+alpha);
+	}
+
+	// Boundary is above
+	for(int k=1;k<=n_ghost_up;k++){
+		alpha = dist_list_up(k);
+		i = ghost_list_up(k,1);
+		j = ghost_list_up(k,2);
+		bc_val =  mms.trigTwilight(0,x(i),0,y(j) + alpha*setup.hy,0,t);
+		v(i,j) = (bc_val + alpha*v(i,j-1))/(1+alpha);
+	}
+
+	// Boundary is below
+	for(int k=1;k<=n_ghost_down;k++){
+		alpha = dist_list_down(k);
+		i = ghost_list_down(k,1);
+		j = ghost_list_down(k,2);
+		bc_val =  mms.trigTwilight(0,x(i),0,y(j) - alpha*setup.hy,0,t);
+		v(i,j) = (bc_val + alpha*v(i,j+1))/(1+alpha);
+	}
 }
 
 
@@ -490,10 +526,12 @@ double Wave_Solve::Compute_Laplacian_Error(const int flag, Darray2& lap, MPI_Com
 			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
 				for(int j=jstart+1;j<=jend-1;j++){
-					wxx = mms.trigTwilight(2,x0,0,y(j),0,t);
-					true_lap = wxx + mms.trigTwilight(0,x0,2,y(j),0,t);
-					err += abs(lap(i,j)-true_lap);
-					norm_sol += abs(true_lap);
+					if(mask(i,j) == 1){
+						wxx = mms.trigTwilight(2,x0,0,y(j),0,t);
+						true_lap = wxx + mms.trigTwilight(0,x0,2,y(j),0,t);
+						err += abs(lap(i,j)-true_lap);
+						norm_sol += abs(true_lap);
+					}
 				}
 			}
 			MPI_Allreduce(&err, &global_err, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
@@ -504,13 +542,14 @@ double Wave_Solve::Compute_Laplacian_Error(const int flag, Darray2& lap, MPI_Com
 			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
 				for(int j=jstart+1;j<=jend-1;j++){
-					wxx = mms.trigTwilight(2,x0,0,y(j),0,t);
-					true_lap = wxx + mms.trigTwilight(0,x0,2,y(j),0,t);
-					err += pow(lap(i,j)-true_lap,2);
-					norm_sol += pow(true_lap,2);
+					if(mask(i,j) == 1){
+						wxx = mms.trigTwilight(2,x0,0,y(j),0,t);
+						true_lap = wxx + mms.trigTwilight(0,x0,2,y(j),0,t);
+						err += pow(lap(i,j)-true_lap,2);
+						norm_sol += pow(true_lap,2);
+					}
 				}
 			}
-
 			MPI_Allreduce(&err, &global_err, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
 			MPI_Allreduce(&norm_sol, &global_norm, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
 			err = sqrt(global_err/global_norm);
@@ -519,10 +558,12 @@ double Wave_Solve::Compute_Laplacian_Error(const int flag, Darray2& lap, MPI_Com
 			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
 				for(int j=jstart+1;j<=jend-1;j++){
-					wxx = mms.trigTwilight(2,x0,0,y(j),0,t);
-					true_lap = wxx + mms.trigTwilight(0,x0,2,y(j),0,t);
-					if(abs(lap(i,j)-true_lap) > max_val) max_val = abs(lap(i,j)-true_lap);
-					if(abs(true_lap) > max_sol) max_sol = abs(true_lap);
+					if(mask(i,j) == 1){
+						wxx = mms.trigTwilight(2,x0,0,y(j),0,t);
+						true_lap = wxx + mms.trigTwilight(0,x0,2,y(j),0,t);
+						if(abs(lap(i,j)-true_lap) > max_val) max_val = abs(lap(i,j)-true_lap);
+						if(abs(true_lap) > max_sol) max_sol = abs(true_lap);		
+					}
 				}
 			}
 			MPI_Allreduce(&max_val, &global_err, 1, MPI_DOUBLE, MPI_MAX, CART_COMM);
@@ -552,9 +593,11 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
 				for(int j=jstart+1;j<=jend-1;j++){
-					true_sol = mms.trigTwilight(0,x0,0,y(j),0,t);
-					err += abs(w(i,j)-true_sol);
-					norm_sol += abs(true_sol);
+					if(mask(i,j) == 1){
+						true_sol = mms.trigTwilight(0,x0,0,y(j),0,t);
+						err += abs(w(i,j)-true_sol);
+						norm_sol += abs(true_sol);
+					}
 				}
 			}
 			MPI_Allreduce(&err, &global_err, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
@@ -565,9 +608,11 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
 				for(int j=jstart+1;j<=jend-1;j++){
-					true_sol = mms.trigTwilight(0,x0,0,y(j),0,t);
-					err += pow(w(i,j)-true_sol,2);
-					norm_sol += pow(true_sol,2);
+					if(mask(i,j) == 1){
+						true_sol = mms.trigTwilight(0,x0,0,y(j),0,t);
+						err += pow(w(i,j)-true_sol,2);
+						norm_sol += pow(true_sol,2);
+					}
 				}
 			}
 			MPI_Allreduce(&err, &global_err, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
@@ -578,9 +623,11 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
 				for(int j=jstart+1;j<=jend-1;j++){
-					true_sol = mms.trigTwilight(0,x0,0,y(j),0,t);
-					if(abs(w(i,j)-true_sol) > max_val) max_val = abs(w(i,j)-true_sol);
-					if(abs(true_sol) > max_sol) max_sol = abs(true_sol);
+					if(mask(i,j) == 1){
+						true_sol = mms.trigTwilight(0,x0,0,y(j),0,t);
+						if(abs(w(i,j)-true_sol) > max_val) max_val = abs(w(i,j)-true_sol);
+						if(abs(true_sol) > max_sol) max_sol = abs(true_sol);
+					}
 				}
 			}
 			MPI_Allreduce(&max_val, &global_err, 1, MPI_DOUBLE, MPI_MAX, CART_COMM);

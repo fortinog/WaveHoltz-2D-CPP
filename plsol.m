@@ -43,9 +43,9 @@ I = find(mask == -3);
 plot(X(I),Y(I),'g*');
 
 legend('Interior', 'Int. Ghost', 'Exterior','Ext. Ghost','Boundary','Location','NorthEastOutside')
-theta = linspace(0,2*pi,1000);
-plot(0.8*cos(theta),0.8*sin(theta),'m--')
+% theta = linspace(0,2*pi,1000);
+% plot(0.8*cos(theta),0.8*sin(theta),'m--')
 
 % Plot the solution
 figure(3)
-surf(X,Y,U)
+surf(X,Y,(mask==1).*U)

@@ -196,7 +196,6 @@ void Compute_Mask(){
         			ghost_list_up(dir_ctr[1],2) = j;
         			dist_list_up(dir_ctr[1]) = setup.Dist_to_bdry(x(i), x(i), y(j), y(j+1),2)/setup.hy;
         			dir_ctr[1] = dir_ctr[1]+1;
-        			cout << dist_list_up(dir_ctr[1]-1) << "\n";
         		}
 
         		// Left
@@ -241,7 +240,9 @@ double Compute_Energy(Darray2& wm, Darray2& w, Darray2& lap, MPI_Comm CART_COMM)
 
 	for(int i=istart+1;i<=iend-1;i++){
 		for(int j=jstart+1;j<=jend-1;j++){
-			energy = energy + idt2*pow(wm(i,j) - w(i,j),2) - w(i,j)*lap(i,j);
+			if(mask(i,j) == 1){
+				energy = energy + idt2*pow(wm(i,j) - w(i,j),2) - w(i,j)*lap(i,j);
+			}
 		}
 	}
 	MPI_Allreduce(&energy, &total_energy, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
