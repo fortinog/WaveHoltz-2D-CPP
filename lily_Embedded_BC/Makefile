@@ -11,7 +11,7 @@ CXXINCLUDE =
 CXXFLAGS = -O3 -I$(SILO_INC) -std=c++11
 LDFLAGS = -L$(SILO_LIB) -lsilo
 
-OBJECTS = main.o parameters_setup.o Wave_Solve1D.o Darrays.o
+OBJECTS = main.o Test.o parameters_setup.o Wave_Solve1D.o Darrays.o
 EXEC = ex.x
 
 .PHONY: clean

@@ -9,7 +9,7 @@
 //#include "parameters_setup.h"
 #include <cmath>
 #include "Darrays.h"
-#include "parameters_setup.h"
+#include "parameters1D_setup.h"
 
 class Wave_Solve1D {
 public:
@@ -25,6 +25,7 @@ public:
     void ghost_points1D(Darray1& u, Darray1& x);
     void laplacian(Darray1& w, Darray1& lap);
     void advance(Darray1& up, Darray1& u, Darray1& um, Darray1& lap);
+    void swap_time(Darray1& wm, Darray1& w, Darray1& wp);
 
 
 };

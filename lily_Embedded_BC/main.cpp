@@ -6,9 +6,10 @@
 #include "stddef.h"
 #include "silo.h"
 #include "Darrays.h"
-#include "parameters_setup.h"
+#include "parameters1D_setup.h"
 #include "Wave_Solve1D.h"
 #include "Test.h"
+#include "parameters2D_setup.h"
 
 
 
@@ -18,43 +19,44 @@ using namespace std::chrono;
 int main()
 {
 
-    Darray1 x;
-    Darray1 w, wp, wm, lap;
+    Darray1 x, y;
+    //Darray1 w, wp, wm, lap;
+    Darray2 w, wp, wm, lap;
+
+
+    int Nx= 5;
+    int Ny= 5;
+    int n_steps = 5;
+
     double energy_old = 1e10;
     double energy;
 
-    int Nx= 5;
-    int n_steps = 5;
 
-    Parameters_setup setup(Nx);
+    Parameters2D_setup setup(Nx, Ny, x, y);
     Wave_Solve1D solve(setup.dt, setup.hx, Nx);
-    Test test(Nx);
-    setup.grids_1D(w, wp, wm, lap);
-    setup.coordinates(x);
+    Test Test(Nx);
+
+    //setup.coordinates();
+    setup.grids(wm, w, wp, lap);
+    setup.initial_value(wm,w,wp);
+    setup.boundary_points(w);
+    setup.ghost_points(w);
 
 
-    setup.ghost_points1D(w, x);
-
-    // Test initialization of ghost points
-    //test.print_matrix1D(-1,Nx+1,x);
 
 
-    //Test updating ghost points
-    setup.Initial_value(w,x);
-
-    for (int itr = 0 ; itr<= n_steps; itr++ )
+    for (int itr = 0 ; itr<= n_steps; itr++)
     {
-        setup.ghost_points1D(w,x);
-        cout << "x_r: " << setup.x_r;
-        cout << itr <<  " w(x): ";
-        for(int i=-1;i<=Nx+1;i++) {
-            cout << w(i) << " ";
-        }
+        setup.ghost_points(w);
+
+        solve.laplacian(w,lap);
 
 
+        solve.advance(wm, w, wp, lap);
 
 
-        cout << "\n";
+        setup.boundary_points(w);
+        Test.print_matrix1D(-1,Nx+1,w);
     }
 
     return 0;
