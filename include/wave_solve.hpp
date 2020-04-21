@@ -376,6 +376,7 @@ void Communicate_Solution(MPI_Comm CART_COMM, double* w_ptr, MPI_Request* send_r
     tag = 25;
     MPI_Isend(w_ptr, 1, sub_send_down, down_neigh, tag, CART_COMM, &send_req[3]);
     MPI_Irecv(w_ptr, 1, sub_recv_up, up_neigh, tag, CART_COMM, &recv_req[3]);
+
 };
 
 // Output solution on each node to FileName

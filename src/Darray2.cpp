@@ -145,7 +145,7 @@ void Darray2::copy( const Darray2& u )
     }
     else
         m_data = NULL;
-    define_offsets();
+    // define_offsets();
 }
 
 void Darray2::writeToFile(char* fileName, int is, int ie, int js, int je)

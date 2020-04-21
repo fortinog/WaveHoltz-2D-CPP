@@ -7,25 +7,30 @@
 static const int	defaultN = 80;
 static const int	defaultM = 80;
 
-static const double	defaultXl					= -0.1;
-static const double	defaultXr					= 1.1;
-static const double	defaultYl					= -0.1;
-static const double	defaultYr					= 1.1;
+static const double	defaultXl					= -1.0;
+static const double	defaultXr					= 1.0;
+static const double	defaultYl					= -1.0;
+static const double	defaultYr					= 1.0;
 
 static const double	defaultCFL					= 0.1;
 static const double	defaultFinalTime			= 1.0;
 
 static const int	defaultTwilightType			= 1;
-static const double	defaultKx					= 2*M_PI;
-static const double	defaultKy					= 2*M_PI;
-static const double	defaultKt					= 2*sqrt(2)*M_PI;
+static const double	defaultKx					= M_PI;
+static const double	defaultKy					= M_PI;
+
+// static const double	defaultKx					= 0.5*M_PI;
+
+// static const double	defaultKy					= 0.5*M_PI;
+// static const double	defaultKt					= sqrt(2)*M_PI;
+static const double	defaultKt					= 0.5*M_PI;
 
 static const double	defaultX0					= 0.0;
 static const double	defaultY0					= 0.0;
 static const double	defaultT0					= 0.0*M_PI;
 
-static const double	defaultCx[5]				= {1,0,0,0,0};
-static const double	defaultCy[5]				= {1,0,0,0,0};
+static const double	defaultCx[5]				= {1,1,1,0,0};
+static const double	defaultCy[5]				= {1,1,1,0,0};
 static const double	defaultCt[5]				= {1,0,0,0,0};
 
 /************************************************************/
@@ -81,17 +86,17 @@ double ProblemSetup::Level_Set(const double x, const double y){
 	// l_val = -std::min(xval,yval);
 	// return l_val;
     
-	double xval, yval, l_val;
-	xval = std::min(x+0.0,1.0-x);
-	yval = std::min(y+0.0,1.0-y);
-	l_val = -std::min(xval,yval);
-	return l_val;
+	// double xval, yval, l_val;
+	// xval = std::min(x+0.0,1.0-x);
+	// yval = std::min(y+0.0,1.0-y);
+	// l_val = -std::min(xval,yval);
+	// return l_val;
     
 
     // Circle of radius 1
-    // double r = pow(x,2) + pow(y,2);
-    // double l_val = r-pow(0.8,2);
-    // return l_val;
+    double r = pow(x,2) + pow(y,2);
+    double l_val = r-pow(0.8,2);
+    return l_val;
 }
 
 // Speed of sound in the medium

@@ -43,7 +43,7 @@ sandwich:
 para:
 	make clean
 	make
-	mpirun --oversubscribe -n 2 ./main
+	mpirun -n 2 ./main
 
 # include the dependency files
 -include $(OBJ_FILES:.o=.d)

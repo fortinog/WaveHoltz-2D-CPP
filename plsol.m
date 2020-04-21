@@ -47,5 +47,9 @@ legend('Interior', 'Int. Ghost', 'Exterior','Ext. Ghost','Boundary','Location','
 % plot(0.8*cos(theta),0.8*sin(theta),'m--')
 
 % Plot the solution
-figure(3)
-surf(X,Y,(mask==1).*U)
+figure(4)
+surf(X,Y,(abs(mask)==1).*U)
+
+xlabel('$x$','interpreter','latex')
+ylabel('$y$','interpreter','latex')
+set(gca,'fontsize',21)
