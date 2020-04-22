@@ -48,7 +48,7 @@ legend('Interior', 'Int. Ghost', 'Exterior','Ext. Ghost','Boundary','Location','
 
 % Plot the solution
 figure(4)
-surf(X,Y,(abs(mask)==1).*U)
+surf(X,Y,((mask)==1).*U)
 
 xlabel('$x$','interpreter','latex')
 ylabel('$y$','interpreter','latex')

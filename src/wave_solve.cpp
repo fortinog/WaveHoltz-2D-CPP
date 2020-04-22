@@ -20,7 +20,7 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 	Twilight mms(setup);      
 	FILE *extFile;
     MPI_Status status;
-	Darray2 w, lap, wm, wp;
+	Darray2 w, lap, wm, wp, u;
 
 	t = 0.0;
     MPI_Comm_rank( CART_COMM, &rank );
@@ -111,6 +111,9 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 	lap.set_value(0.0);
 	mask.define(1,istart,iend,jstart,jend);
 	mask.set_value(10);
+    
+    u.define(1,istart,iend,jstart,jend);
+    u.set_value(0.0);
 
 
 	// Bring out data pointer for message passing
@@ -207,13 +210,25 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
     Setup_Subarrays(nolp);
     // (*this).t += 0.1;
 	// Fill in w, wm, lap so that we can start time stepping immediately
-	Set_Initial_Data(wm, w, lap);
+	Set_Initial_Data(wm, w, lap, u);
 
 	// w.set_value(0.0);
 	// Enforce_BC(w);
 
 	// Solve PDE forward to final time specified in Problem_Setup
-    Solve_PDE(wm, w, wp, lap, w_ptr, CART_COMM);
+    for(int k=0;k<setup.iter;k++){
+        Solve_PDE(wm, w, wp, lap ,u, w_ptr, CART_COMM);
+        (*this).t = 0;
+        w.copy(u);
+        Enforce_BC(w);
+//        for(int i=istart;i<=iend;i++)
+//            for (int j=jstart;j<=jend;j++){
+//                u(i,j) = 0.5*setup.dt*w(i,j)*0.75;
+//            }
+        Compute_Laplacian(w,lap);
+        Taylor_Expand(wm,w,lap);
+    }
+
 
 
 	// for(int i = istart;i<iend;i++){
@@ -265,14 +280,15 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 
 // Fill in with initial data, compute the Laplacian, and do a 
 // Taylor expansion so that we may start time stepping after this.
-void Wave_Solve::Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap){
+void Wave_Solve::Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap, Darray2& u){
 	Twilight mms(setup);
 	double x0;
 
 	for(int i=istart;i<=iend;i++){
 		x0 = x(i);
 		for(int j=jstart;j<=jend;j++){
-			w(i,j) = mms.trigTwilight(0,x0,0,y(j),0,(*this).t);
+            w(i,j) = mms.trigTwilight(0,x0,0,y(j),0,(*this).t);
+            u(i,j) = w(i,j)*0.5*setup.dt*0.75;
 		}
 	}
 	Compute_Laplacian(w, lap);
@@ -284,9 +300,11 @@ void Wave_Solve::Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap){
 double Wave_Solve::forcing(const double x0, const double y0, const double t0){
 	Twilight mms(setup);
 	double wxx, wyy, val;
+    double w;
 	wxx = mms.trigTwilight(2,x0,0,y0,0,t0);
 	wyy = mms.trigTwilight(0,x0,2,y0,0,t0);
-	val = mms.trigTwilight(0,x0,0,y0,2,t0) - wxx - wyy;
+    w = mms.trigTwilight(0,x0,0,y0,0,t0);
+	val =  -(wxx + wyy+ pow(setup.omega,2)*w)*cos(setup.omega*t0);
 	return val;
 }
 
@@ -697,7 +715,7 @@ void Wave_Solve::Time_Step(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap){
 
 // Do the full wave solve. Note: This currently prints out the 
 // energy for every time step.
-void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, double* w_ptr, MPI_Comm CART_COMM){
+void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM){
 	double energy_old = 1e10;
 	double energy;
     MPI_Request send_req[4];
@@ -705,12 +723,25 @@ void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, d
 
 	for(int i =0;i<setup.nsteps;i++){
 	    Time_Step(wm,w,wp,lap);
-	    energy = Compute_Energy(wm, w, lap,CART_COMM);
-        cout << scientific << right << setw(14)<< abs(energy-energy_old)/abs(energy_old) << "\n";
-	    energy_old = energy;
+        for(int k=istart;k<=iend;k++){
+            for(int l=jstart;l<=jend;l++){
+                u(k,l) = u(k,l) + setup.dt*w(k,l)*(cos(setup.omega*(*this).t)-0.25);
+            }
+        }
+        
+//       energy = Compute_Energy(wm, w, lap,CART_COMM);
+//       cout << scientific << right << setw(14)<< abs(energy-energy_old)/abs(energy_old) << "\n";
+//	    energy_old = energy;
 	    // Compute_Laplacian(w,lap);
 	    Communicate_Solution(CART_COMM,w_ptr,send_req,recv_req);
 	    Compute_Laplacian_NB(w, lap, recv_req);
         MPI_Waitall( 4, send_req, MPI_STATUSES_IGNORE );
+        
 	}
+    for(int k=istart;k<=iend;k++){
+        for(int l=jstart;l<=jend;l++){
+            u(k,l) = u(k,l) - 0.5*setup.dt*w(k,l)*(cos(setup.omega*(*this).t)-0.25);
+            u(k,l) = setup.omega*u(k,l)/M_PI;
+        }
+    }
 }
