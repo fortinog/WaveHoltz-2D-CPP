@@ -15,6 +15,7 @@ struct ProblemSetup {
 	int numberOfGridpoints;
 	int N;
 	int M;
+    int iter;
 
 	// Step size in either direction
 	double hx;
@@ -34,7 +35,6 @@ struct ProblemSetup {
 	double y_L;
 	double y_R;
     double omega;
-    int iter;
 
 	// Specify a type for MMS (if used)
 	int twilightType;

@@ -12,15 +12,20 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 	int buf_size;
 	int proc_per_node;
 	int loc_sz[4];
+	int WHiter= 0;
 	double lap_err[3];
 	double sol_err[3];
 	double err;
 	double dt, dt2, idt2; 
+	double res, global_res, global_res_old;
+	double res_delta;
     char fName[100]; 
+    MPI_Request send_req[4];
+    MPI_Request recv_req[4];
 	Twilight mms(setup);      
 	FILE *extFile;
     MPI_Status status;
-	Darray2 w, lap, wm, wp, u;
+	Darray2 w, lap, wm, wp, u, uold;
 
 	t = 0.0;
     MPI_Comm_rank( CART_COMM, &rank );
@@ -109,8 +114,10 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 	wm.set_value(0.0);
 	lap.define(1,istart,iend,jstart,jend);
 	lap.set_value(0.0);
+	uold.define(1,istart,iend,jstart,jend);
 	mask.define(1,istart,iend,jstart,jend);
 	mask.set_value(10);
+
     
     u.define(1,istart,iend,jstart,jend);
     u.set_value(0.0);
@@ -208,62 +215,44 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 
     // Set up all communication subarrays.
     Setup_Subarrays(nolp);
-    // (*this).t += 0.1;
+
 	// Fill in w, wm, lap so that we can start time stepping immediately
 	Set_Initial_Data(wm, w, lap, u);
 
-	// w.set_value(0.0);
-	// Enforce_BC(w);
 
-	// Solve PDE forward to final time specified in Problem_Setup
-    for(int k=0;k<setup.iter;k++){
-        Solve_PDE(wm, w, wp, lap ,u, w_ptr, CART_COMM);
-        (*this).t = 0;
-        w.copy(u);
-        Enforce_BC(w);
-//        for(int i=istart;i<=iend;i++)
-//            for (int j=jstart;j<=jend;j++){
-//                u(i,j) = 0.5*setup.dt*w(i,j)*0.75;
-//            }
-        Compute_Laplacian(w,lap);
-        Taylor_Expand(wm,w,lap);
+	// Perform WaveHoltz iteration. Exit when successive residuals differ
+	// by less than a drop tolerance.
+	global_res_old = 1.0;
+	res_delta = 1.0;
+    while((WHiter<setup.iter) && (res_delta > 1e-4) && (global_res_old > 1e-4)){    	
+    	uold.copy(w);
+    	Evolve_and_Project(wm, w, wp, lap ,u, w_ptr, CART_COMM);
+	    res = 0.0;
+		for(int i=istart+1;i<=iend-1;i++){
+			for(int j=jstart+1;j<=jend-1;j++){
+				if(abs(mask(i,j)) == 1){
+					res += pow(w(i,j)-uold(i,j),2);
+				}
+			}
+		}
+		MPI_Allreduce(&res, &global_res, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
+		global_res = sqrt(global_res);
+		if(rank == 0){
+			cout << "ITER : " << WHiter << " Residual : " << global_res << "\n";
+		}
+		WHiter++;
+		res_delta = abs(global_res_old - global_res)/global_res_old;
+		global_res_old = global_res;
     }
 
-
-
-	// for(int i = istart;i<iend;i++){
-	// 	for(int j = jstart;j<jend;j++){
-	// 		// if(mask(i,j)==1){
-	// 			w(i,j) = w(i,j) - mms.trigTwilight(0,x(i),0,y(j),0,(*this).t);
-	// 			// w(i,j) = w(i,j) - pow(x(i),2);
-
-	// 			// w(i,j) = lap(i,j) - mms.trigTwilight(2,x(i),0,y(j),0,(*this).t)
-	// 							  // - mms.trigTwilight(0,x(i),2,y(j),0,(*this).t);
-
-	// 		// }
-	// 		// cout << w(i,j) << " ";
-	// 	}
-	// 	// cout << "\n";
-	// }
 
     // Compute solution error (1, 2, Inf norms)
     sol_err[0] = Compute_Solution_Error(1, w, CART_COMM);
     sol_err[1] = Compute_Solution_Error(2, w, CART_COMM);
     sol_err[2] = Compute_Solution_Error(3, w, CART_COMM);
 
-    // Compute Laplacian error (1, 2, Inf norms)
-    lap_err[0] = Compute_Laplacian_Error(1, lap, CART_COMM);
-    lap_err[1] = Compute_Laplacian_Error(2, lap, CART_COMM);
-    lap_err[2] = Compute_Laplacian_Error(3, lap, CART_COMM);
-
 	MPI_Barrier(CART_COMM);
     if(rank == 0){
-    	cout << "Error in computing the Laplacian : ";
-		cout << scientific << right << setw(14)<< lap_err[0];
-		cout << scientific << right << setw(14)<< lap_err[1];
-		cout << scientific << right << setw(14)<< lap_err[2];
-		cout << "\n";
-
     	cout << "Error in computing the solution : ";
 		cout << scientific << right << setw(14)<< sol_err[0];
 		cout << scientific << right << setw(14)<< sol_err[1];
@@ -287,7 +276,8 @@ void Wave_Solve::Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap, Darray2
 	for(int i=istart;i<=iend;i++){
 		x0 = x(i);
 		for(int j=jstart;j<=jend;j++){
-            w(i,j) = mms.trigTwilight(0,x0,0,y(j),0,(*this).t);
+            // w(i,j) = mms.trigTwilight(0,x0,0,y(j),0,(*this).t);
+            w(i,j) = 0.0;
             u(i,j) = w(i,j)*0.5*setup.dt*0.75;
 		}
 	}
@@ -305,6 +295,7 @@ double Wave_Solve::forcing(const double x0, const double y0, const double t0){
 	wyy = mms.trigTwilight(0,x0,2,y0,0,t0);
     w = mms.trigTwilight(0,x0,0,y0,0,t0);
 	val =  -(wxx + wyy+ pow(setup.omega,2)*w)*cos(setup.omega*t0);
+	// val =  wxx + wyy - mms.trigTwilight(0,x0,0,y0,2,t0);
 	return val;
 }
 
@@ -324,7 +315,7 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 	for(int k = 1;k<=n_bdry;k++){
 		i = bdry_list(k,1);
 		j = bdry_list(k,2);
-		v(i,j) =  mms.trigTwilight(0,x(i),0,y(j),0,(*this).t);
+		v(i,j) =  cos(setup.omega*(*this).t)*(mms.trigTwilight(0,x(i),0,y(j),0,(*this).t));
 	}
 
 	// Boundary is right
@@ -332,7 +323,7 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 		alpha = dist_list_right(k);
 		i = ghost_list_right(k,1);
 		j = ghost_list_right(k,2);
-		bc_val =  mms.trigTwilight(0,x(i) + alpha*setup.hx,0,y(j),0,(*this).t);
+		bc_val =  cos(setup.omega*(*this).t)*(mms.trigTwilight(0,x(i) + alpha*setup.hx,0,y(j),0,(*this).t));
 		v(i,j) = (bc_val + alpha*v(i-1,j))/(1.0+alpha);
 	}
 
@@ -341,7 +332,7 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 		alpha = dist_list_left(k);
 		i = ghost_list_left(k,1);
 		j = ghost_list_left(k,2);
-		bc_val =  mms.trigTwilight(0,x(i) - alpha*setup.hx,0,y(j),0,(*this).t);
+		bc_val =  cos(setup.omega*(*this).t)*(mms.trigTwilight(0,x(i) - alpha*setup.hx,0,y(j),0,(*this).t));
 		v(i,j) = (bc_val + alpha*v(i+1,j))/(1.0+alpha);
 	}
 
@@ -350,7 +341,7 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 		alpha = dist_list_up(k);
 		i = ghost_list_up(k,1);
 		j = ghost_list_up(k,2);
-		bc_val =  mms.trigTwilight(0,x(i),0,y(j) + alpha*setup.hy,0,(*this).t);
+		bc_val =  cos(setup.omega*(*this).t)*(mms.trigTwilight(0,x(i),0,y(j) + alpha*setup.hy,0,(*this).t));
 		v(i,j) = (bc_val + alpha*v(i,j-1))/(1.0+alpha);
 	}
 
@@ -359,7 +350,7 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 		alpha = dist_list_down(k);
 		i = ghost_list_down(k,1);
 		j = ghost_list_down(k,2);
-		bc_val =  mms.trigTwilight(0,x(i),0,y(j) - alpha*setup.hy,0,(*this).t);
+		bc_val =  cos(setup.omega*(*this).t)*(mms.trigTwilight(0,x(i),0,y(j) - alpha*setup.hy,0,(*this).t));
 		v(i,j) = (bc_val + alpha*v(i,j+1))/(1.0+alpha);
 	}
 }
@@ -629,10 +620,10 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 
 	switch(flag){
 		case 1:
-			for(int i=istart;i<=iend;i++){
+			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
-				for(int j=jstart;j<=jend;j++){
-					if(abs(mask(i,j)) == 1){
+				for(int j=jstart+1;j<=jend-1;j++){
+					if((mask(i,j)) == 1){
 						true_sol = mms.trigTwilight(0,x0,0,y(j),0,(*this).t);
 						err += abs(w(i,j)-true_sol);
 						norm_sol += abs(true_sol);
@@ -644,10 +635,10 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 			err = global_err/global_norm;
 			break;
 		case 2:
-			for(int i=istart;i<=iend;i++){
+			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
-				for(int j=jstart;j<=jend;j++){
-					if(abs(mask(i,j)) == 1){
+				for(int j=jstart+1;j<=jend-1;j++){
+					if((mask(i,j)) == 1){
 						true_sol = mms.trigTwilight(0,x0,0,y(j),0,(*this).t);
 						err += pow(w(i,j)-true_sol,2);
 						norm_sol += pow(true_sol,2);
@@ -659,10 +650,10 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 			err = sqrt(global_err/global_norm);
 			break;
 		case 3:
-			for(int i=istart;i<=iend;i++){
+			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
-				for(int j=jstart;j<=jend;j++){
-					if(abs(mask(i,j)) == 1){
+				for(int j=jstart+1;j<=jend-1;j++){
+					if((mask(i,j)) == 1){
 						true_sol = mms.trigTwilight(0,x0,0,y(j),0,(*this).t);
 						if(abs(w(i,j)-true_sol) > max_val) max_val = abs(w(i,j)-true_sol);
 						if(abs(true_sol) > max_sol) max_sol = abs(true_sol);
@@ -687,8 +678,9 @@ void Wave_Solve::Taylor_Expand(Darray2& wm, Darray2& w, Darray2& lap){
 	for(int i=istart+1;i<=iend-1;i++){
 		x0 = x(i);
 		for(int j=jstart+1;j<=jend-1;j++){
-			wm(i,j) = w(i,j) - dt*mms.trigTwilight(0,x0,0,y(j),1,(*this).t) + 0.5*dt2*(lap(i,j) + forcing(x0,y(j),(*this).t));
-			// wm(i,j) = w(i,j) + 0.5*dt2*(lap(i,j) + forcing(x0,y(j),0.0));
+			// wm(i,j) = w(i,j) - dt*mms.trigTwilight(0,x0,0,y(j),1,(*this).t) + 0.5*dt2*(lap(i,j) + forcing(x0,y(j),(*this).t));
+
+			wm(i,j) = w(i,j) + 0.5*dt2*(lap(i,j) + forcing(x0,y(j),0.0));
 		}
 	}
 }
@@ -744,4 +736,25 @@ void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Da
             u(k,l) = setup.omega*u(k,l)/M_PI;
         }
     }
+}
+
+
+// Perform one iteration of WaveHoltz.
+void Wave_Solve::Evolve_and_Project(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM){
+    MPI_Request send_req[4];
+    MPI_Request recv_req[4];
+
+	Solve_PDE(wm, w, wp, lap ,u, w_ptr, CART_COMM);
+	(*this).t = 0;
+	w.copy(u);
+	Enforce_BC(w);
+	for(int i=istart;i<=iend;i++){
+        for (int j=jstart;j<=jend;j++){
+            u(i,j) = 0.5*setup.dt*w(i,j)*0.75;
+        }
+    }
+	Communicate_Solution(CART_COMM,w_ptr,send_req,recv_req);
+	Compute_Laplacian_NB(w, lap, recv_req);
+	MPI_Waitall( 4, send_req, MPI_STATUSES_IGNORE );
+	Taylor_Expand(wm,w,lap);
 }

@@ -62,7 +62,7 @@ public:
 	void    Taylor_Expand(Darray2& wm, Darray2& w, Darray2& lap);
 	double  forcing(const double x, const double y, const double t);
 	void    Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM);
-
+    void    Evolve_and_Project(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM);
 
 // Define the mask and sweep arrays which will be used to enforce boundary conditions.
 void Compute_Mask(){

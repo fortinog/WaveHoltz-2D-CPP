@@ -4,35 +4,30 @@
 /*	    HERE IS WHERE WE EDIT THE PROBLEM PARAMETERS	    */
 /************************************************************/
 
-static const int	defaultN = 200;
-static const int	defaultM = 200;
-static const int    defaultiter = 1;
+static const int	defaultN = 60;
+static const int	defaultM = 60;
+static const int    defaultiter = 500;
 
 static const double	defaultXl					= -1.0;
 static const double	defaultXr					= 1.0;
 static const double	defaultYl					= -1.0;
 static const double	defaultYr					= 1.0;
 
-static const double	defaultCFL					= 0.05;
-
+static const double	defaultCFL					= 0.5;
 
 static const int	defaultTwilightType			= 1;
-static const double	defaultKx					= M_PI;
+static const double	defaultKx					= 0.5*M_PI;
 static const double	defaultKy					= M_PI;
-static const double defaultomega                = 10.0;
-
-// static const double	defaultKx					= 0.5*M_PI;
-
-// static const double	defaultKy					= 0.5*M_PI;
-// static const double	defaultKt					= sqrt(2)*M_PI;
 static const double	defaultKt					= 0.0;
+// static const double defaultomega                = 0.77*pow(M_PI,2);
+static const double defaultomega                = 3.8;
 
 static const double	defaultX0					= 0.0;
 static const double	defaultY0					= 0.0;
 static const double	defaultT0					= 0.5*M_PI;
 
-static const double	defaultCx[5]				= {1,1,1,0,0};
-static const double	defaultCy[5]				= {1,1,1,0,0};
+static const double	defaultCx[5]				= {1,1,0,0,0};
+static const double	defaultCy[5]				= {1,1,0,0,0};
 static const double	defaultCt[5]				= {1,0,0,0,0};
 
 /************************************************************/
@@ -84,11 +79,11 @@ ProblemSetup::ProblemSetup():
 double ProblemSetup::Level_Set(const double x, const double y){
 	
     // [x_L,x_R]x[y_L,y_R]
-     double xval, yval, l_val;
-     xval = std::min(x-(*this).x_L,(*this).x_R-x);
-     yval = std::min(y-(*this).y_L,(*this).y_R-y);
-     l_val = -std::min(xval,yval);
-     return l_val;
+     // double xval, yval, l_val;
+     // xval = std::min(x-(*this).x_L,(*this).x_R-x);
+     // yval = std::min(y-(*this).y_L,(*this).y_R-y);
+     // l_val = -std::min(xval,yval);
+     // return l_val;
     
 	// double xval, yval, l_val;
 	// xval = std::min(x+0.0,1.0-x);
@@ -98,9 +93,9 @@ double ProblemSetup::Level_Set(const double x, const double y){
     
 
     // Circle of radius 1
-//    double r = pow(x,2) + pow(y,2);
-//    double l_val = r-pow(0.8,2);
-//    return l_val;
+   double r = pow(x,2) + pow(y,2);
+   double l_val = r-pow(1.0,2);
+   return l_val;
 }
 
 // Speed of sound in the medium
