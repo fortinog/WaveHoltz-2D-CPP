@@ -6,7 +6,12 @@
 
 static const int	defaultN = 60;
 static const int	defaultM = 60;
-static const int    defaultiter = 500;
+
+
+static const int    defaultIter      = 100;
+static const double	defaultTol	     = 1e-10;
+static const int    defaultPrintFreq = 1;
+
 
 static const double	defaultXl					= -1.0;
 static const double	defaultXr					= 1.0;
@@ -19,7 +24,6 @@ static const int	defaultTwilightType			= 1;
 static const double	defaultKx					= 0.5*M_PI;
 static const double	defaultKy					= M_PI;
 static const double	defaultKt					= 0.0;
-// static const double defaultomega                = 0.77*pow(M_PI,2);
 static const double defaultomega                = 3.8;
 
 static const double	defaultX0					= 0.0;
@@ -51,7 +55,9 @@ ProblemSetup::ProblemSetup():
 	y0(defaultY0),
 	t0(defaultT0),
     omega(defaultomega),
-    iter(defaultiter)
+    cg_iter(defaultIter),
+    cg_tol(defaultTol),
+    print_freq(defaultPrintFreq)
 	{ 
 		int i;
 		for(i=0;i<5;i++){
@@ -61,8 +67,6 @@ ProblemSetup::ProblemSetup():
 		}
 
 		// Include the physical boundary for now
-		// hx = (x_R-x_L)/double(N+1);
-		// hy = (y_R-y_L)/double(M+1);
 		hx = (x_R-x_L)/double(N-1);
 		hy = (y_R-y_L)/double(M-1);
 

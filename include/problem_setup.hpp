@@ -15,7 +15,14 @@ struct ProblemSetup {
 	int numberOfGridpoints;
 	int N;
 	int M;
-    int iter;
+
+
+	// Conjugate gradient parameters
+    int    cg_iter;
+    double cg_tol;
+
+    // Frequency of solution dumping
+    int    print_freq;
 
 	// Step size in either direction
 	double hx;

@@ -4,6 +4,7 @@ INC_DIR    = include
 BUILD_DIR  = .build
 LDFLAGS    = ""
 LDPATH     = SRC_DIR
+DATA_DIR   = data
 
 # list all source and object files
 SRC_FILES  = $(wildcard $(SRC_DIR)/*.cpp)
@@ -31,6 +32,8 @@ $(BUILD_DIR)/%.o : $(SRC_DIR)/%.cpp
 clean:
 	rm -fr $(BUILD_DIR) 
 	rm -f  main 
+	rm -f $(DATA_DIR)/*.txt
+	rm -f *.txt
 
 debug: CXXFLAGS += -DDEBUG -g
 debug: main
@@ -42,6 +45,7 @@ sandwich:
 	./main
 para:
 	make clean
+	rm $(DATA_DIR)/*.txt
 	make
 	mpirun -n 2 ./main
 

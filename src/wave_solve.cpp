@@ -18,14 +18,15 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 	double err;
 	double dt, dt2, idt2; 
 	double res, global_res, global_res_old;
+	double alpha, beta, tmp;
 	double res_delta;
-    char fName[100]; 
+    char fName[100];
     MPI_Request send_req[4];
     MPI_Request recv_req[4];
 	Twilight mms(setup);      
 	FILE *extFile;
     MPI_Status status;
-	Darray2 w, lap, wm, wp, u, uold;
+	Darray2 w, lap, wm, wp, u, uold, b, r, u_sol;
 
 	t = 0.0;
     MPI_Comm_rank( CART_COMM, &rank );
@@ -115,13 +116,14 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
 	lap.define(1,istart,iend,jstart,jend);
 	lap.set_value(0.0);
 	uold.define(1,istart,iend,jstart,jend);
-	mask.define(1,istart,iend,jstart,jend);
-	mask.set_value(10);
-
-    
     u.define(1,istart,iend,jstart,jend);
     u.set_value(0.0);
-
+	mask.define(1,istart,iend,jstart,jend);
+	mask.set_value(10);
+	b.define(1,istart,iend,jstart,jend);
+   	r.define(1,istart,iend,jstart,jend);
+	u_sol.define(1,istart,iend,jstart,jend);
+	u_sol.set_value(0.0);
 
 	// Bring out data pointer for message passing
     double* w_ptr = w.c_ptr();
@@ -216,35 +218,54 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
     // Set up all communication subarrays.
     Setup_Subarrays(nolp);
 
+	// Get RHS of SPD WaveHoltz system (stored in b)
+	Set_Initial_Data(wm, b, lap, u);
+	Solve_PDE(wm, w, wp, lap, u, w_ptr, CART_COMM);
+	b.copy(u);
+	(*this).t = 0;
+
 	// Fill in w, wm, lap so that we can start time stepping immediately
 	Set_Initial_Data(wm, w, lap, u);
+    Evolve_and_Project(b, uold, wm, w, wp, lap, u, w_ptr, CART_COMM);
 
+	// Initialize residual and direction vector for Conjugate Gradient
+    r.copy(b);
+    res = Compute_Inner_Product(r, r, CART_COMM);
 
-	// Perform WaveHoltz iteration. Exit when successive residuals differ
-	// by less than a drop tolerance.
-	global_res_old = 1.0;
-	res_delta = 1.0;
-    while((WHiter<setup.iter) && (res_delta > 1e-4) && (global_res_old > 1e-4)){    	
-    	uold.copy(w);
-    	Evolve_and_Project(wm, w, wp, lap ,u, w_ptr, CART_COMM);
-	    res = 0.0;
+	// Perform standard Conjugate Gradient
+    while((WHiter<setup.cg_iter) && (res > setup.cg_tol)){  
+    	Evolve_and_Project(b, uold, wm, w, wp, lap, u, w_ptr, CART_COMM);
+		alpha = res/Compute_Inner_Product(uold, u, CART_COMM);
 		for(int i=istart+1;i<=iend-1;i++){
 			for(int j=jstart+1;j<=jend-1;j++){
-				if(abs(mask(i,j)) == 1){
-					res += pow(w(i,j)-uold(i,j),2);
-				}
+				r(i,j) -= alpha*u(i,j);
+				u_sol(i,j) += alpha*uold(i,j);
 			}
 		}
-		MPI_Allreduce(&res, &global_res, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
-		global_res = sqrt(global_res);
+		tmp = Compute_Inner_Product(r, r, CART_COMM);
+		beta = tmp/res;
+		res = tmp;
+		for(int i=istart+1;i<=iend-1;i++){
+			for(int j=jstart+1;j<=jend-1;j++){
+				w(i,j) = r(i,j) + beta*uold(i,j);
+			}
+		}
+
+		// Print convergence history to screen
 		if(rank == 0){
-			cout << "ITER : " << WHiter << " Residual : " << global_res << "\n";
+			fprintf(stderr, "ITER : %3.3i\t RESIDUAL: %4.4e \n", WHiter, res);
 		}
 		WHiter++;
-		res_delta = abs(global_res_old - global_res)/global_res_old;
-		global_res_old = global_res;
-    }
 
+		if(WHiter%setup.print_freq == 0){
+	    	sprintf(fName, "data/u_%4.4i_%4.4i.txt", node_ID,WHiter);
+			Print_Solution(fName, IO_buf, u_sol, size_array, proc_per_node, node_rank, IO_Comm);
+		}
+
+		// Print solution to file
+	}
+	w.copy(u_sol);
+	Enforce_BC(w);
 
     // Compute solution error (1, 2, Inf norms)
     sol_err[0] = Compute_Solution_Error(1, w, CART_COMM);
@@ -276,7 +297,6 @@ void Wave_Solve::Set_Initial_Data(Darray2& wm, Darray2& w, Darray2& lap, Darray2
 	for(int i=istart;i<=iend;i++){
 		x0 = x(i);
 		for(int j=jstart;j<=jend;j++){
-            // w(i,j) = mms.trigTwilight(0,x0,0,y(j),0,(*this).t);
             w(i,j) = 0.0;
             u(i,j) = w(i,j)*0.5*setup.dt*0.75;
 		}
@@ -305,7 +325,6 @@ void Wave_Solve::Enforce_BC(Darray2 &v){
 	Twilight mms(setup);
 	int i,j;
 	double x0, y0;
-	// double t = (*this).t;
 	double alpha;
 	double bc_val;
 
@@ -615,10 +634,10 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 	double x0;
 	double max_val = 0.0;
 	double max_sol = 0.0;
-	// double t = (*this).t;
 	Twilight mms(setup);
 
 	switch(flag){
+		// 1-norm
 		case 1:
 			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
@@ -634,6 +653,7 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 			MPI_Allreduce(&norm_sol, &global_norm, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
 			err = global_err/global_norm;
 			break;
+		// 2-norm
 		case 2:
 			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
@@ -649,6 +669,7 @@ double Wave_Solve::Compute_Solution_Error(const int flag, Darray2& w, MPI_Comm C
 			MPI_Allreduce(&norm_sol, &global_norm, 1, MPI_DOUBLE, MPI_SUM, CART_COMM);
 			err = sqrt(global_err/global_norm);
 			break;
+		// Inf-norm
 		case 3:
 			for(int i=istart+1;i<=iend-1;i++){
 				x0 = x(i);
@@ -678,8 +699,6 @@ void Wave_Solve::Taylor_Expand(Darray2& wm, Darray2& w, Darray2& lap){
 	for(int i=istart+1;i<=iend-1;i++){
 		x0 = x(i);
 		for(int j=jstart+1;j<=jend-1;j++){
-			// wm(i,j) = w(i,j) - dt*mms.trigTwilight(0,x0,0,y(j),1,(*this).t) + 0.5*dt2*(lap(i,j) + forcing(x0,y(j),(*this).t));
-
 			wm(i,j) = w(i,j) + 0.5*dt2*(lap(i,j) + forcing(x0,y(j),0.0));
 		}
 	}
@@ -691,14 +710,12 @@ void Wave_Solve::Time_Step(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap){
 	int M = setup.M;
 	double dt2 = setup.dt2;
 	double x0;
-	// double t = (*this).t;
 	for(int i=istart+1;i<=iend-1;i++){
 		x0 = x(i);
 		for(int j=jstart+1;j<=jend-1;j++){
 			wp(i,j) = 2.0*w(i,j) - wm(i,j) + dt2*(lap(i,j) + forcing(x0,y(j),(*this).t)); 
 		}
 	}
-
 	wm.copy(w);
 	w.copy(wp);
 	(*this).t += setup.dt;
@@ -707,11 +724,28 @@ void Wave_Solve::Time_Step(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap){
 
 // Do the full wave solve. Note: This currently prints out the 
 // energy for every time step.
-void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM){
+void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap, Darray2& u, double* w_ptr, MPI_Comm CART_COMM){
 	double energy_old = 1e10;
 	double energy;
     MPI_Request send_req[4];
     MPI_Request recv_req[4];
+
+    Enforce_BC(w);
+
+    // First step in Trap Rule
+	for(int i=istart;i<=iend;i++){
+        for (int j=jstart;j<=jend;j++){
+            u(i,j) = 0.5*setup.dt*w(i,j)*0.75;
+        }
+    }
+
+    // Compute Laplacian at t=0 and Taylor expand to get 
+    // w(-dt,x,y)
+	Communicate_Solution(CART_COMM,w_ptr,send_req,recv_req);
+	Compute_Laplacian_NB(w, lap, recv_req);
+	MPI_Waitall( 4, send_req, MPI_STATUSES_IGNORE );
+	Taylor_Expand(wm,w,lap);
+
 
 	for(int i =0;i<setup.nsteps;i++){
 	    Time_Step(wm,w,wp,lap);
@@ -721,15 +755,15 @@ void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Da
             }
         }
         
-//       energy = Compute_Energy(wm, w, lap,CART_COMM);
-//       cout << scientific << right << setw(14)<< abs(energy-energy_old)/abs(energy_old) << "\n";
-//	    energy_old = energy;
-	    // Compute_Laplacian(w,lap);
+		// energy = Compute_Energy(wm, w, lap,CART_COMM);
+		// cout << scientific << right << setw(14)<< abs(energy-energy_old)/abs(energy_old) << "\n";
+		// energy_old = energy;
 	    Communicate_Solution(CART_COMM,w_ptr,send_req,recv_req);
 	    Compute_Laplacian_NB(w, lap, recv_req);
         MPI_Waitall( 4, send_req, MPI_STATUSES_IGNORE );
-        
 	}
+
+	// Correct trap rule at final integration point and scale by normalization constant
     for(int k=istart;k<=iend;k++){
         for(int l=jstart;l<=jend;l++){
             u(k,l) = u(k,l) - 0.5*setup.dt*w(k,l)*(cos(setup.omega*(*this).t)-0.25);
@@ -740,21 +774,20 @@ void Wave_Solve::Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Da
 
 
 // Perform one iteration of WaveHoltz.
-void Wave_Solve::Evolve_and_Project(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM){
+void Wave_Solve::Evolve_and_Project(Darray2& b, Darray2& uold, Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM){
     MPI_Request send_req[4];
     MPI_Request recv_req[4];
 
+    // Copy initial data for application of operator
+    uold.copy(w);
+
 	Solve_PDE(wm, w, wp, lap ,u, w_ptr, CART_COMM);
 	(*this).t = 0;
-	w.copy(u);
-	Enforce_BC(w);
+
+	// Action of SPD WaveHoltz operator
 	for(int i=istart;i<=iend;i++){
         for (int j=jstart;j<=jend;j++){
-            u(i,j) = 0.5*setup.dt*w(i,j)*0.75;
+            u(i,j) = uold(i,j)-u(i,j)+b(i,j);
         }
     }
-	Communicate_Solution(CART_COMM,w_ptr,send_req,recv_req);
-	Compute_Laplacian_NB(w, lap, recv_req);
-	MPI_Waitall( 4, send_req, MPI_STATUSES_IGNORE );
-	Taylor_Expand(wm,w,lap);
 }

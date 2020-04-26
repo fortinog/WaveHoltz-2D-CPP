@@ -62,7 +62,7 @@ public:
 	void    Taylor_Expand(Darray2& wm, Darray2& w, Darray2& lap);
 	double  forcing(const double x, const double y, const double t);
 	void    Solve_PDE(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM);
-    void    Evolve_and_Project(Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM);
+    void    Evolve_and_Project(Darray2& b, Darray2& uold, Darray2& wm, Darray2& w, Darray2& wp, Darray2& lap,Darray2& u, double* w_ptr, MPI_Comm CART_COMM);
 
 // Define the mask and sweep arrays which will be used to enforce boundary conditions.
 void Compute_Mask(){
@@ -380,7 +380,7 @@ void Communicate_Solution(MPI_Comm CART_COMM, double* w_ptr, MPI_Request* send_r
 };
 
 // Output solution on each node to FileName
-void Print_Solution(char* FileName,double* IO_buf, Darray2& w, int* size_array, int proc_per_node, int node_rank, MPI_Comm IO_Comm){
+void Print_Solution(char* FileName, double* IO_buf, Darray2& w, int* size_array, int proc_per_node, int node_rank, MPI_Comm IO_Comm){
     MPI_Status status;
     int tag = 22;
     int source;
@@ -432,6 +432,20 @@ void Finalize(){
 	MPI_Type_free( &sub_send_down  ); 
 	MPI_Type_free( &sub_recv_down  );	
 };
+
+double Compute_Inner_Product(Darray2& u, Darray2& v, MPI_Comm COMM){
+    double res = 0.0;
+    double full_ip;
+    for(int i=istart+1;i<=iend-1;i++){
+        for(int j=jstart+1;j<=jend-1;j++){
+            if(abs(mask(i,j)) == 1){
+                res += u(i,j)*v(i,j);
+            }
+        }
+    }
+    MPI_Allreduce(&res, &full_ip, 1, MPI_DOUBLE, MPI_SUM, COMM);
+    return full_ip;
+}
 
 };
 #endif
