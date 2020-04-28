@@ -1,5 +1,5 @@
 #include "wave_solve.hpp"
-
+#include <algorithm>
 Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MPI_Comm IO_Comm){
 	int nsteps, nolp;
 	int ndims = 2;
@@ -165,7 +165,7 @@ Wave_Solve::Wave_Solve(Subdomain Local_Grid, int node_ID, MPI_Comm CART_COMM, MP
     // large enough for all data, otherwise allocate just enough to copy
     // local data sans halo region.
     if(node_rank == 0){
-    	int* max_sz = max_element(size_array, size_array+proc_per_node);
+    	int* max_sz = std::max_element(size_array, size_array+proc_per_node);
     	IO_buf = new double[*max_sz];
     	mask_buf = new int[*max_sz];
     } else{

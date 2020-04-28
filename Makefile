@@ -14,11 +14,12 @@ INC        = -I$(INC_DIR)
 
 # CXX        = g++
 CXX        = mpicxx
-CXXFLAGS   = -O3 
+#CXX        = mpiicc
+CXXFLAGS   = -O3 -std=c++11
 
 # Rule for linking main
 main: $(OBJ_FILES)
-	$(CXX) -o $@ $(OBJ_FILES) $(LDFLAGS) -L$(LDPATH)
+	$(CXX) -o $@ $(OBJ_FILES)
 
 # Rule for building all src files
 $(BUILD_DIR)/%.o : $(SRC_DIR)/%.cpp

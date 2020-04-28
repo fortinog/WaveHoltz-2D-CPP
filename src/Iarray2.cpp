@@ -1,5 +1,5 @@
 #include <iostream>
-
+#include <sys/types.h>
 #include "Iarray2.h"
 
 using namespace std;

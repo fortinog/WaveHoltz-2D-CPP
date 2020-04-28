@@ -1,5 +1,5 @@
 // A simple one dimensional array class that can use arbitrary index range
-
+#include<sys/types.h>
 class Darray1
 {
   public:

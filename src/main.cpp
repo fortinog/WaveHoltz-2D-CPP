@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <cmath>
 #include <chrono> 
+#include<cstring>
 #include <vector>
 #include "Darray2.h"
 #include "problem_setup.hpp"

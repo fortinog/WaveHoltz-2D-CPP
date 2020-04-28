@@ -1,5 +1,5 @@
 #include"problem_setup.hpp"
-
+#include<stdlib.h>
 /************************************************************/
 /*	    HERE IS WHERE WE EDIT THE PROBLEM PARAMETERS	    */
 /************************************************************/
